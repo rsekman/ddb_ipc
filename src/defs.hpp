@@ -5,6 +5,7 @@
 #define DDB_IPC_PROJECT_NAME "DeaDBeef IPC"
 #define DDB_IPC_PROJECT_DESC "Provides socket-based IPC using JSON messages."
 #define DDB_IPC_PROJECT_URL "https://github.com/rsekman/ddb-ipc"
+#define DDB_IPC_DEFAULT_SOCKET "/tmp/ddb_socket"
 #define DDB_IPC_LICENSE_TEXT  \
     "Copyright 2021 Robin Ekman\n" \
     "\n" \

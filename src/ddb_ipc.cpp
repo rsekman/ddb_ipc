@@ -11,7 +11,8 @@
 
 namespace ddb_ipc{
 
-const char Plugin::configDialog_ [] = "Hello world!";
+const char Plugin::configDialog_ [] =
+    "property \"Socket location\" entry " DDB_IPC_PROJECT_ID ".socketpath \"" DDB_IPC_DEFAULT_SOCKET "\" ;\n";
 
 DB_plugin_t Plugin::definition_;
 
