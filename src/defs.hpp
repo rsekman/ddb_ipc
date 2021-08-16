@@ -23,3 +23,20 @@
     "\n" \
     "You should have received a copy of the GNU General Public License\n" \
     "along with this program.  If not, see <http://www.gnu.org/licenses/>.\n"
+
+#define DDB_IPC_LOG_NONE  0
+#define DDB_IPC_LOG_ERR   1
+#define DDB_IPC_LOG_WARN  2
+#define DDB_IPC_LOG_DEBUG 3
+
+#define DDB_IPC_LOGLEVEL DDB_IPC_LOG_DEBUG
+
+#define DDB_IPC_ERR \
+    if (DDB_IPC_LOGLEVEL < DDB_IPC_LOG_ERR) {} \
+    else std::cerr
+#define DDB_IPC_WARN \
+    if (DDB_IPC_LOGLEVEL < DDB_IPC_LOG_WARN) {} \
+    else std::cerr
+#define DDB_IPC_DEBUG \
+    if (DDB_IPC_LOGLEVEL < DDB_IPC_LOG_DEBUG) {} \
+    else std::cerr

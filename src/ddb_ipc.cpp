@@ -33,7 +33,7 @@ DB_plugin_t* Plugin::load(DB_functions_t* api) {
     init(api);
     ipc_listening = 0;
     ddb_api->conf_get_str(DDB_IPC_PROJECT_ID ".socketpath", DDB_IPC_DEFAULT_SOCKET, socket_path, PATH_MAX);
-    std::cerr << "Opening socket at " << socket_path << std::endl;
+    DDB_IPC_DEBUG << "Opening socket at " << socket_path << std::endl;
     ipc_listening = 1;
     pthread_create(&ipc_thread, NULL, listen, (void*) socket_path);
     return &definition_;
@@ -46,7 +46,7 @@ int Plugin::open_socket(char* socket_path){
     sock  = socket(PF_LOCAL, SOCK_DGRAM, 0);
     if (sock < 0 ){
         // TODO: Better error handling here
-        std::cerr << "Error creating socket: " << errno << std::endl;
+        DDB_IPC_ERR << "Error creating socket: " << errno << std::endl;
         return -1;
     }
     name.sun_family = AF_LOCAL;
@@ -55,7 +55,7 @@ int Plugin::open_socket(char* socket_path){
     size = SUN_LEN(&name);
     if ( bind(sock, (struct sockaddr* ) &name, size) < 0 ){
         // TODO: Better error handling here
-        std::cerr << "Error binding socket: " << errno << std::endl;
+        DDB_IPC_ERR << "Error binding socket: " << errno << std::endl;
         return -1;
     }
     return sock;
@@ -72,13 +72,13 @@ void* Plugin::listen(void* sockname){
     };
     while (ipc_listening){
         // nanosleep ( &req, NULL );
-        std::cerr << "Pollling socket..." << std::endl;
+        DDB_IPC_DEBUG << "Pollling socket..." << std::endl;
         status = poll(&fds, 1, DDB_IPC_POLL_FREQ);
         if (status <= 0 ){
             continue;
         }
         if ( recv( ddb_socket, buf, DDB_IPC_MAX_MESSAGE_LENGTH, 0) > 0 ){
-            std::cerr << "We received this message: " << buf;
+            DDB_IPC_DEBUG << "We received this message: " << buf;
         }
         buf[0] = '\0';
 
@@ -112,10 +112,10 @@ int Plugin::start() {
 }
 
 int Plugin::stop() {
-    std::cerr << "Stopping polling thread..." << std::endl;
+    DDB_IPC_DEBUG << "Stopping polling thread..." << std::endl;
     ipc_listening = 0;
     pthread_join(ipc_thread, NULL);
-    std::cerr << "Closing socket...." << std::endl;
+    DDB_IPC_DEBUG << "Closing socket...." << std::endl;
     ::close(ddb_socket);
     ::unlink(socket_path);
     return 0;
