@@ -33,10 +33,14 @@
 
 #define DDB_IPC_ERR \
     if (DDB_IPC_LOGLEVEL < DDB_IPC_LOG_ERR) {} \
-    else std::cerr
+    else std::cerr << "[ddb_ipc_err] "
 #define DDB_IPC_WARN \
     if (DDB_IPC_LOGLEVEL < DDB_IPC_LOG_WARN) {} \
-    else std::cerr
+    else std::cerr << "[ddb_ipc] [warn] "
 #define DDB_IPC_DEBUG \
     if (DDB_IPC_LOGLEVEL < DDB_IPC_LOG_DEBUG) {} \
-    else std::cerr
+    else std::cerr << "[ddb_ipc] [debug] "
+
+#define DDB_IPC_RESPONSE_OK     "OK"
+#define DDB_IPC_RESPONSE_ERR    "ERROR"
+#define DDB_IPC_RESPONSE_BADQ   "BAD REQUEST"
