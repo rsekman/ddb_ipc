@@ -8,6 +8,8 @@ BUILDDIR=build
 SRCDIR=src
 TESTDIR=test
 
+SOCK=/tmp/ddb_socket
+
 OUT=$(BUILDDIR)/ddb_ipc.so
 
 SOURCES?=$(wildcard $(SRCDIR)/*.cpp)
@@ -19,7 +21,9 @@ TESTOBJ?=$(patsubst $(TESTDIR)/%.cpp, $(BUILDDIR)/%.o, $(TESTSOURCES))
 all: $(OUT) test
 
 test: $(OUT) $(BUILDDIR)/test
+	(sleep 2 && echo "Hello world!" | socat - $(SOCK)) &
 	$(BUILDDIR)/test
+	rm -f $(SOCK)
 
 $(BUILDDIR)/test: $(TESTOBJ) $(OUT)
 	$(CXX) $(CFLAGS) -ldl -lpthread $(TESTOBJ) -o $@
@@ -38,3 +42,4 @@ $(BUILDDIR):
 
 clean:
 	rm -rf $(BUILDDIR)
+	rm -f $(SOCK)
