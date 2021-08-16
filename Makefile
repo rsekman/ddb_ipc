@@ -6,24 +6,31 @@ LDFLAGS+=-shared
 
 BUILDDIR=build
 SRCDIR=src
+TESTDIR=test
 
-OUT=ddb_ipc.so
+OUT=$(BUILDDIR)/ddb_ipc.so
 
 SOURCES?=$(wildcard $(SRCDIR)/*.cpp)
+TESTSOURCES?=$(wildcard $(TESTDIR)/*.cpp)
+COMMON=$(SRCDIR)/defs.hpp
 OBJ?=$(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/%.o, $(SOURCES))
+TESTOBJ?=$(patsubst $(TESTDIR)/%.cpp, $(BUILDDIR)/%.o, $(TESTSOURCES))
 
-all: $(BUILDDIR) $(BUILDDIR)/$(OUT)
+all: $(OUT) test
 
-test: $(BUILDDIR)/$(OUT) $(BUILDDIR)/test
+test: $(OUT) $(BUILDDIR)/test
 	$(BUILDDIR)/test
 
-$(BUILDDIR)/test: $(SRCDIR)/test.cpp
-	$(CXX) $(CFLAGS) -ldl $< -o $@
+$(BUILDDIR)/test: $(TESTOBJ) $(OUT)
+	$(CXX) $(CFLAGS) -ldl -lpthread $(TESTOBJ) -o $@
 
-$(BUILDDIR)/%.o: src/%.cpp src/%.hpp
+$(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/%.hpp $(COMMON)
 	$(CXX) $(CFLAGS) $< -c -o $@
 
-$(BUILDDIR)/$(OUT): $(OBJ) $(BUILDDIR)
+$(BUILDDIR)/%.o: $(TESTDIR)/%.cpp $(TESTDIR)/%.hpp $(COMMON)
+	$(CXX) $(CFLAGS) $< -c -o $@
+
+$(OUT): $(OBJ) $(BUILDDIR)
 	$(CXX) $(CFLAGS$) $(LDFLAGS) $(OBJ) -o $@
 
 $(BUILDDIR):

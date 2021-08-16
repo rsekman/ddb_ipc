@@ -1,5 +1,6 @@
 #include <iostream>
 #include <dlfcn.h>
+#include <unistd.h>
 
 #include <deadbeef/deadbeef.h>
 #include <nlohmann/json.hpp>
@@ -21,7 +22,10 @@ int main(void) {
     } else {
         // ddb_ipc_lib = (ddb_ipc_load_t) ddb_ipc_lib;
     }
-    DB_plugin_t* plugin = ddb_ipc_load(NULL);
+    DB_functions_t ddb_api = ddb_ipc::get_ddb_mock_api();
+    DB_plugin_t* plugin = ddb_ipc_load( &ddb_api );
     std::cout << "Loaded plugin " << plugin->name << std::endl;
+    sleep(20);
+    plugin->stop();
     return 0;
 }
