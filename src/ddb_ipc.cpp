@@ -7,7 +7,6 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include <time.h>
 #include <pthread.h>
 #include <linux/limits.h>
 
@@ -63,10 +62,6 @@ int Plugin::open_socket(char* socket_path){
 }
 
 void* Plugin::listen(void* sockname){
-    const struct timespec req = {
-        (DDB_IPC_POLL_FREQ * 1000000 ) / (int) 1000000000,
-        (DDB_IPC_POLL_FREQ * 1000000 ) % (int) 1000000000
-    };
     char buf[DDB_IPC_MAX_MESSAGE_LENGTH];
     buf[0] = '\0';
     ddb_socket = open_socket((char*) sockname);
