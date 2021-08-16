@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <iostream>
 #include <string.h>
+#include <string>
 #include <errno.h>
 #include <sys/socket.h>
 #include <sys/poll.h>
@@ -12,6 +13,7 @@
 
 #include <deadbeef/deadbeef.h>
 #include <nlohmann/json.hpp>
+using json = nlohmann::json;
 
 #include "defs.hpp"
 #include "ddb_ipc.hpp"
@@ -43,16 +45,17 @@ int Plugin::open_socket(char* socket_path){
     struct sockaddr_un name;
     size_t size;
     int sock;
-    sock  = socket(PF_LOCAL, SOCK_DGRAM, 0);
+    sock  = socket(PF_LOCAL, SOCK_STREAM, 0);
     if (sock < 0 ){
         // TODO: Better error handling here
         DDB_IPC_ERR << "Error creating socket: " << errno << std::endl;
         return -1;
     }
-    name.sun_family = AF_LOCAL;
+    name.sun_family = PF_LOCAL;
     strncpy(name.sun_path, socket_path, sizeof(name.sun_path));
     name.sun_path[sizeof(name.sun_path) - 1] = '\0';
     size = SUN_LEN(&name);
+    ::unlink(socket_path);
     if ( bind(sock, (struct sockaddr* ) &name, size) < 0 ){
         // TODO: Better error handling here
         DDB_IPC_ERR << "Error binding socket: " << errno << std::endl;
@@ -66,25 +69,73 @@ void* Plugin::listen(void* sockname){
     buf[0] = '\0';
     ddb_socket = open_socket((char*) sockname);
     int status;
+    json message;
+    int conn;
+    int ret = ::listen(ddb_socket, 1);
+    while ( 1 ){
+        conn = accept( ddb_socket, NULL, NULL);
+        if ( conn < 0 ) {
+            continue;
+        } else {
+            DDB_IPC_DEBUG << "Accepted incoming connection." << std::endl;
+            break;
+        }
+    }
     struct pollfd fds = {
-        ddb_socket,
+        conn,
         POLLIN
     };
     while (ipc_listening){
-        // nanosleep ( &req, NULL );
-        DDB_IPC_DEBUG << "Pollling socket..." << std::endl;
         status = poll(&fds, 1, DDB_IPC_POLL_FREQ);
-        if (status <= 0 ){
+        if (status < 0 ){
+            DDB_IPC_ERR << "Error reading from socket:" << errno << std::endl;
+        }
+        if (status <= 0) {
             continue;
         }
-        if ( recv( ddb_socket, buf, DDB_IPC_MAX_MESSAGE_LENGTH, 0) > 0 ){
+        if ( recv( conn, buf, DDB_IPC_MAX_MESSAGE_LENGTH, 0) > 0 ){
             DDB_IPC_DEBUG << "We received this message: " << buf;
+            try {
+                message = json::parse(buf);
+            } catch (const json::exception& e) {
+                DDB_IPC_WARN << "Message is not valid JSON: " << e.what() << std::endl;
+                send_response( json {
+                        {"status", DDB_IPC_RESPONSE_ERR},
+                        {"response", std::string("Message is not VALID JSON: ") + e.what()}
+                    },
+                 conn);
+                continue;
+            }
+            handle_message(message, conn);
         }
         buf[0] = '\0';
 
     }
-    //::close(conn);
     return 0;
+}
+
+void Plugin::handle_message(json message, int socket){
+    json response;
+    if ( message.contains("id") && message["id"].type() == json::value_t::number_integer ){
+        response["id"] = message["id"];
+    }
+    if ( !message.contains("command") || message["command"].type() != json::value_t::string ) {
+        DDB_IPC_WARN << "Bad request: `command` field must be present and must be a string." << std::endl;
+        response["status"]   = DDB_IPC_RESPONSE_BADQ;
+        response["response"] = "`command` field must be present and must be a string.";
+        send_response(response, socket);
+        return;
+    }
+}
+
+void Plugin::send_response(json response, int socket){
+    std::string response_str = response.dump() + std::string("\n");
+    if ( send(socket, response_str.c_str(), response_str.size(), MSG_NOSIGNAL) > 0 ) {
+        DDB_IPC_DEBUG << "Responded: " << response << std::endl;
+    } else{
+        DDB_IPC_ERR << "Error sending response: errno " << errno << std::endl;
+    }
+    // TODO: error handling
 }
 
 void Plugin::init(DB_functions_t* api) {

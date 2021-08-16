@@ -7,6 +7,8 @@
 #include <deadbeef/deadbeef.h>
 #include <nlohmann/json.hpp>
 
+using json = nlohmann::json;
+
 namespace ddb_ipc{
 
 DB_functions_t* ddb_api;
@@ -25,6 +27,8 @@ class Plugin{
         static DB_plugin_t definition_;
         static const char configDialog_ [];
         static int open_socket(char* socketpath);
+        static void handle_message(json message, int socket);
+        static void send_response(json response, int socket);
         static int ddb_socket;
         static char socket_path [PATH_MAX];
         static void* listen(void* sock);
