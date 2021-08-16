@@ -1,4 +1,4 @@
-.PHONY: test clean
+.PHONY: test clean install
 
 CXX?=g++
 CFLAGS+=-Wall -g -O2 -fPIC -D_GNU_SOURCE
@@ -19,6 +19,9 @@ OBJ?=$(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/%.o, $(SOURCES))
 TESTOBJ?=$(patsubst $(TESTDIR)/%.cpp, $(BUILDDIR)/%.o, $(TESTSOURCES))
 
 all: $(OUT) test
+
+install: $(OUT)
+	cp -t ~/.local/lib/deadbeef $(OUT)
 
 test: $(OUT) $(BUILDDIR)/test
 	(sleep 2 && echo "Hello world!" | socat - $(SOCK)) &
