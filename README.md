@@ -6,7 +6,7 @@ Inspired by the corresponding functionality in `mpv --input-ipc-server`
 
 ## License
 
-GPLv2
+GPL 3
 
 ## Requirements:
 
