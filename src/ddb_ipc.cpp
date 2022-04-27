@@ -63,6 +63,13 @@ void send_response(json response, int socket){
         DDB_IPC_DEBUG << "Responded: " << response << std::endl;
     } else{
         DDB_IPC_ERR << "Error sending response: errno " << errno << std::endl;
+        ::close(socket);
+        for(int i=0; i<= DDB_IPC_MAX_CONNECTIONS; i++){
+            if(fds[i].fd == socket) {
+                fds[i].fd = -1;
+                break;
+            }
+    }
     }
     // TODO: error handling
 }
