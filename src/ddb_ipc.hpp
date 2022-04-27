@@ -1,6 +1,5 @@
 #ifndef DDB_IPC_PROJECT_ID
 
-#define DDB_API_LEVEL 8
 #define DDB_IPC_VERSION_MAJOR 0
 #define DDB_IPC_VERSION_MINOR 1
 #define DDB_IPC_PROJECT_ID "ddb_ipc"

@@ -30,11 +30,13 @@ char socket_path[PATH_MAX];
 
 typedef struct pollfd pollfd_t;
 
+pollfd_t fds[DDB_IPC_MAX_CONNECTIONS +1];
+
 int open_socket(char* socket_path){
     struct sockaddr_un name;
     size_t size;
     int sock;
-    sock  = socket(PF_LOCAL, SOCK_STREAM, 0);
+    sock  = socket(PF_LOCAL, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (sock < 0 ){
         // TODO: Better error handling here
         DDB_IPC_ERR << "Error creating socket: " << errno << std::endl;
@@ -63,70 +65,178 @@ void send_response(json response, int socket){
     // TODO: error handling
 }
 
+void broadcast(json message) {
+    std::string message_str = message.dump() + std::string("\n");
+    DDB_IPC_DEBUG << "Broadcasting: " << message_str;
+    for(int i=1; i<=DDB_IPC_MAX_CONNECTIONS; i++) {
+        if(fds[i].fd > -1) {
+            send(fds[i].fd, message_str.c_str(), message_str.size(), MSG_NOSIGNAL);
+        }
+    }
+}
+
+json ok_response(int id) {
+    json resp = json { {"status", DDB_IPC_RESPONSE_OK} };
+    if(id) {
+        resp["id"] = id;
+    }
+    return resp;
+};
+
+json bad_request_response(int id, std::string mess) {
+    json resp = json { {"status", DDB_IPC_RESPONSE_BADQ}, {"response", mess} };
+    if(id) {
+        resp["id"] = id;
+    }
+    return resp;
+}
+json error_response(int id, std::string mess) {
+    json resp = json { {"status", DDB_IPC_RESPONSE_ERR}, {"response", mess} };
+    if(id) {
+        resp["id"] = id;
+    }
+    return resp;
+}
+
+json command_play(int id, json args) {
+    ddb_api->sendmessage(DB_EV_PLAY_CURRENT, 0, 0, 0);
+    return ok_response(id);
+}
+
+json command_pause(int id, json args) {
+    ddb_api->sendmessage(DB_EV_PAUSE, 0, 0, 0);
+    return ok_response(id);
+}
+
+json command_play_pause(int id, json args) {
+    ddb_api->sendmessage(DB_EV_TOGGLE_PAUSE, 0, 0, 0);
+    return ok_response(id);
+}
+
+json command_stop(int id, json args) {
+    ddb_api->sendmessage(DB_EV_STOP, 0, 0, 0);
+    return ok_response(id);
+}
+
+json command_prev(int id, json args) {
+    ddb_api->sendmessage(DB_EV_PREV, 0, 0, 0);
+    return ok_response(id);
+}
+
+json command_next(int id, json args) {
+    ddb_api->sendmessage(DB_EV_NEXT, 0, 0, 0);
+    return ok_response(id);
+}
+
+json command_set_volume(int id, json args) {
+    if( !args.contains("volume") ) {
+        return bad_request_response(id, std::string("Argument volume is mandatory"));
+    }
+    if(args["volume"].type() != json::value_t::number_float ) {
+        return bad_request_response(id, std::string("Argument volume must be a float"));
+    }
+    if(args["volume"] > 1 || args["volume"] < 0) {
+        return bad_request_response(id, std::string("Argument volume must be from [0, 1]"));
+    }
+    ddb_api->volume_set_amp(args["volume"]);
+    return ok_response(id);
+}
+
+json command_adjust_volume(int id, json args) {
+    if( !args.contains("adjustment") ) {
+        return bad_request_response(id, std::string("Argument adjustment is mandatory"));
+    }
+    if(args["adjustment"].type() != json::value_t::number_float ) {
+        return bad_request_response(id, std::string("Argument adjustment must be a float"));
+    }
+    if(args["adjustment"] > 1 || args["adjustment"] < -1) {
+        return bad_request_response(id, std::string("Argument adjustment must be from [-1, 1]"));
+    }
+    ddb_api->volume_set_amp(ddb_api->volume_get_amp() + (float) args["adjustment"]);
+    return ok_response(id);
+}
+
+json command_seek(int id, json args){
+    return error_response(id, std::string("Not implemented"));
+}
+
+typedef json (*ipc_command)(int, json);
 void handle_message(json message, int socket){
     json response;
-    if ( message.contains("id") && message["id"].type() == json::value_t::number_integer ){
-        response["id"] = message["id"];
+    int id = 0;
+    if ( message.contains("id") && (
+         message["id"].type() == json::value_t::number_unsigned || message["id"].type() == json::value_t::number_integer
+    ) ){
+        id = message["id"];
     }
     if ( !message.contains("command") || message["command"].type() != json::value_t::string ) {
         DDB_IPC_WARN << "Bad request: `command` field must be present and must be a string." << std::endl;
-        response["status"]   = DDB_IPC_RESPONSE_BADQ;
-        response["response"] = "`command` field must be present and must be a string.";
+        response = bad_request_response(id, "`command` field must be present and must be a string.");
         send_response(response, socket);
         return;
     }
+    if (!message.contains("args") ) {
+        message["args"] = {};
+    }
+    std::map<std::string, ipc_command>  handlers = {
+        {"play", command_play},
+        {"pause", command_pause},
+        {"play-pause", command_play_pause},
+        {"stop", command_stop},
+        {"set-volume", command_set_volume},
+        {"adjust-volume", command_adjust_volume},
+        {"seek", command_seek}
+    };
+    try {
+        response = handlers.at(message["command"])(id, message["args"]);
+    } catch (std::out_of_range& e) {
+        response = error_response(id, std::string("Unknown command"));
+    }
+    send_response(response, socket);
 }
 
 
 void* listen(void* sockname){
+    int i;
+    int rc;
+    int new_conn, conn_accepted;
+    int close_conn;
     char buf[DDB_IPC_MAX_MESSAGE_LENGTH];
     buf[0] = '\0';
-    ddb_socket = open_socket((char*) sockname);
-    int status;
     json message;
-    int conn;
-    int ret = ::listen(ddb_socket, 1);
-    while ( 1 ){
-        conn = accept( ddb_socket, NULL, NULL);
-        if ( conn < 0 ) {
-            continue;
-        } else {
-            DDB_IPC_DEBUG << "Accepted incoming connection." << std::endl;
-            break;
-        }
-    }
-    pollfd_t fds[DDB_IPC_MAX_CONNECTIONS +1];
+
     pollfd_t open_slot = {
         .fd = -1,
         .events = POLLIN,
         .revents = 0
     };
-    int i;
-    int rc;
-    int new_conn, conn_accepted;
-    int close_conn;
-    char buffer[DDB_IPC_MAX_MESSAGE_LENGTH];
-    for(i=1; i<= DDB_IPC_MAX_CONNECTIONS; i++){
+    for(i=0; i<= DDB_IPC_MAX_CONNECTIONS; i++){
         memcpy(&fds[i], &open_slot, sizeof(pollfd_t) );
     }
+
+    ddb_socket = open_socket((char*) sockname);
+    rc = ::listen(ddb_socket, 1);
+    fds[0].fd = ddb_socket;
+
     while (ipc_listening){
-        status = poll(fds, DDB_IPC_MAX_CONNECTIONS + 1, DDB_IPC_POLL_FREQ);
-        if (status < 0 ){
+        rc = poll(fds, DDB_IPC_MAX_CONNECTIONS + 1, DDB_IPC_POLL_FREQ);
+        if (rc < 0 ){
             DDB_IPC_ERR << "Error reading from socket:" << errno << std::endl;
         }
-        if (status == 0) {
+        if (rc == 0) {
             // timed out
             continue;
         }
         if(fds[0].revents & POLLIN){
-            // there is an incoming connection
-            while( new_conn = accept(fds[0].fd, NULL, NULL) >= 0) {
+            // TODO refactor this into its own function
+            // there are incoming connections
+            while( (new_conn = accept(fds[0].fd, NULL, NULL)) >= 0) {
                 conn_accepted = 0;
                 // find an open slot
                 for(i=1; i<= DDB_IPC_MAX_CONNECTIONS; i++){
                     if(fds[i].fd < 0){
                         fds[i].fd = new_conn;
-                        DDB_IPC_DEBUG << "accepted new connectiod with descriptor" << new_conn;
+                        DDB_IPC_DEBUG << "Accepted new connection with descriptor " << new_conn << std::endl;
                         conn_accepted = 1;
                         break;
                     }
@@ -146,10 +256,13 @@ void* listen(void* sockname){
         }
         for(i=1; i<= DDB_IPC_MAX_CONNECTIONS; i++){
             close_conn = 0;
+            // TODO refactor this into its own function
             if( fds[i].revents & POLLIN ) {
                 do {
-                    // there is data to read
-                    rc = recv(fds[i].fd, buffer, DDB_IPC_MAX_MESSAGE_LENGTH, 0);
+                    DDB_IPC_DEBUG << "There is data to read on descriptor " << fds[i].fd << std::endl;
+                    // zero out the buffer
+                    memset(buf, '\0', DDB_IPC_MAX_MESSAGE_LENGTH);
+                    rc = recv(fds[i].fd, buf, DDB_IPC_MAX_MESSAGE_LENGTH, 0);
                     if( rc < 0) {
                         if( errno != EWOULDBLOCK ){
                             close_conn = 1;
@@ -159,21 +272,22 @@ void* listen(void* sockname){
                         close_conn = 1;
                         break;
                     }
-                    DDB_IPC_DEBUG << "We received this message on descriptor" << fds[i].fd << ":"  << buf;
+                    DDB_IPC_DEBUG << "Received this message on descriptor " << fds[i].fd << ":"  << buf << std::endl;
                     try {
                         message = json::parse(buf);
-                        handle_message(message, conn);
+                        handle_message(message, fds[i].fd);
                     } catch (const json::exception& e) {
                         DDB_IPC_WARN << "Message is not valid JSON: " << e.what() << std::endl;
                         send_response( json {
                                 {"status", DDB_IPC_RESPONSE_ERR},
-                                {"response", std::string("Message is not VALID JSON: ") + e.what()}
+                                {"response", std::string("Message is not valid JSON: ") + e.what()}
                                 },
                                 fds[i].fd);
                     }
                 } while (1);
                 if(close_conn) {
                     ::close(fds[i].fd);
+                    DDB_IPC_DEBUG << "Closed connection with descriptor " << fds[i].fd << std::endl;;
                     // free up the slot
                     fds[i].fd = -1;
                 }
@@ -207,7 +321,33 @@ int connect(){
     return 0;
 }
 
+void on_toggle_pause(int p) {
+    if(p) {
+        broadcast( json { {"event", "paused" }} );
+    } else {
+        broadcast( json { {"event", "unpaused" }} );
+    }
+}
+
+void on_seek(ddb_event_playpos_t* ctx) {
+    return;
+}
+
+void on_volume_change() {
+    float vol = 100 * ddb_api->volume_get_amp();
+    broadcast( json {
+            {"property-change", "volume"},
+            {"value", vol}
+            } );
+}
+
 int handleMessage(uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2){
+    switch(id) {
+        case DB_EV_PAUSED:
+            on_toggle_pause(p1);
+        case DB_EV_SEEKED:
+            on_seek( (ddb_event_playpos_t*) ctx);
+    }
     return 0;
 }
 
