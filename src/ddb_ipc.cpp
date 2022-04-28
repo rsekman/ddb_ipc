@@ -391,7 +391,8 @@ void handle_message(json message, int socket){
     if (!message.contains("args") ) {
         message["args"] = {};
     }
-    std::map<std::string, ipc_command>  handlers = {
+    message["args"]["socket"] = socket;
+    std::map<std::string, ipc_command> commands = {
         {"play", command_play},
         {"pause", command_pause},
         {"play-pause", command_play_pause},
@@ -403,9 +404,10 @@ void handle_message(json message, int socket){
         {"get-playpos", command_get_playpos},
         {"get-property", command_get_property},
         {"set-property", command_set_property},
+        {"observe-property", command_observe_property},
     };
     try {
-        response = handlers.at(message["command"])(id, message["args"]);
+        response = commands.at(message["command"])(id, message["args"]);
     } catch (std::out_of_range& e) {
         response = error_response(id, std::string("Unknown command"));
     }
