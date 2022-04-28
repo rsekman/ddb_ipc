@@ -17,10 +17,14 @@
 using json = nlohmann::json;
 
 #include "ddb_ipc.hpp"
+#include "commands.hpp"
+#include "properties.hpp"
 
 #include <deadbeef/deadbeef.h>
 
-using namespace ddb_ipc;
+namespace ddb_ipc{
+
+DB_functions_t* ddb_api;
 
 const char configDialog_ [] =
     "property \"Socket location\" entry " DDB_IPC_PROJECT_ID ".socketpath \"" DDB_IPC_DEFAULT_SOCKET "\" ;\n";
@@ -114,267 +118,13 @@ json error_response(int id, std::string mess) {
     return resp;
 }
 
-// Command handlers
 
-json command_play(int id, json args) {
-    ddb_api->sendmessage(DB_EV_PLAY_CURRENT, 0, 0, 0);
-    return ok_response(id);
+std::map<int, std::set<std::string>> observers {} ;
+
+json command_observe_property(int id, json args) {
+    // TODO implement observing
+    return json { } ;
 }
-
-json command_pause(int id, json args) {
-    ddb_api->sendmessage(DB_EV_PAUSE, 0, 0, 0);
-    return ok_response(id);
-}
-
-json command_play_pause(int id, json args) {
-    ddb_api->sendmessage(DB_EV_TOGGLE_PAUSE, 0, 0, 0);
-    return ok_response(id);
-}
-
-json command_stop(int id, json args) {
-    ddb_api->sendmessage(DB_EV_STOP, 0, 0, 0);
-    return ok_response(id);
-}
-
-json command_prev(int id, json args) {
-    ddb_api->sendmessage(DB_EV_PREV, 0, 0, 0);
-    return ok_response(id);
-}
-
-json command_next(int id, json args) {
-    ddb_api->sendmessage(DB_EV_NEXT, 0, 0, 0);
-    return ok_response(id);
-}
-
-json command_set_volume(int id, json args) {
-    if( !args.contains("volume") ) {
-        return bad_request_response(id, std::string("Argument volume is mandatory"));
-    }
-    if(!args["volume"].is_number()) {
-        return bad_request_response(id, std::string("Argument volume must be a float"));
-    }
-    float vol = args["volume"];
-    float mindb = ddb_api->volume_get_min_db();
-    if(vol > 100 || vol < 0) {
-        return bad_request_response(id, std::string("Argument volume must be from [0, 100]"));
-    }
-    ddb_api->volume_set_db( (1-vol/100) * mindb );
-    return ok_response(id);
-}
-
-json command_adjust_volume(int id, json args) {
-    if( !args.contains("adjustment") ) {
-        return bad_request_response(id, std::string("Argument adjustment is mandatory"));
-    }
-    if( !args["adjustment"].is_number() ) {
-        return bad_request_response(id, std::string("Argument adjustment must be a float"));
-    }
-    float adj = ((float) args["adjustment"])/100;
-    if(adj > 1 || adj < -1) {
-        return bad_request_response(id, std::string("Argument adjustment must be from [-1, 1]"));
-    }
-    float mindb = ddb_api->volume_get_min_db();
-    float voldb = ddb_api->volume_get_db();
-    ddb_api->volume_set_db(voldb - mindb * adj);
-    return ok_response(id);
-}
-
-json command_toggle_mute(int id, json args) {
-    DDB_IPC_DEBUG << "Toggling mute." << std::endl;
-    int m = ddb_api->audio_is_mute();
-    if(m) {
-        ddb_api->audio_set_mute(0);
-    } else {
-        ddb_api->audio_set_mute(1);
-    }
-    return ok_response(id);
-}
-
-json command_get_playpos(int id, json args) {
-    DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
-    if(!cur) {
-        return error_response(id, "Not playing.");
-    }
-    float dur = ddb_api->pl_get_item_duration(cur);
-    float playpos = ddb_api->streamer_get_playpos();
-    json resp = ok_response(id);
-    resp.merge_patch(
-        json {
-            {"status", DDB_IPC_RESPONSE_OK},
-            {"data", {
-                {"duration", dur},
-                {"position", playpos}
-                }
-            }
-        }
-    );
-    return resp;
-}
-json command_seek(int id, json args){
-    return error_response(id, std::string("Not implemented"));
-}
-
-json get_property_volume() {
-    float mindb = ddb_api->volume_get_min_db();
-    float voldb = ddb_api->volume_get_db();
-    return 100*(mindb - voldb)/mindb;
-}
-
-json get_property_mute() {
-    return (json::boolean_t) ddb_api->audio_is_mute();
-}
-
-json get_property_shuffle() {
-    auto shuffles = std::map<ddb_shuffle_t, std::string> {
-        {DDB_SHUFFLE_OFF, "off"},
-        {DDB_SHUFFLE_TRACKS, "tracks"},
-        {DDB_SHUFFLE_ALBUMS, "albums"},
-        {DDB_SHUFFLE_RANDOM, "random"}
-    };
-    auto shuff = (ddb_shuffle_t) ddb_api->conf_get_int("playback.order", 0);
-    DDB_IPC_DEBUG << "shuffle: " << shuff << std::endl;
-    if( shuffles.count(shuff) ) {
-        return shuffles[shuff];
-    } else {
-        return json { "n/a" } ;
-    }
-}
-
-json get_property_repeat() {
-    auto repeats = std::map<ddb_repeat_t, std::string> {
-        {DDB_REPEAT_ALL, "all"},
-        {DDB_REPEAT_OFF, "off"},
-        {DDB_REPEAT_SINGLE, "one"},
-    };
-    auto rep = (ddb_repeat_t) ddb_api->conf_get_int("playback.loop", 0);
-    DDB_IPC_DEBUG << "repeat: " << rep << std::endl;
-    if( repeats.count(rep) ) {
-        return repeats[rep];
-    } else {
-        return json { "n/a" } ;
-    }
-}
-
-void set_property_shuffle(json arg) {
-    auto shuffles = std::map<std::string, ddb_shuffle_t> {
-        {"off", DDB_SHUFFLE_OFF},
-        {"tracks", DDB_SHUFFLE_TRACKS},
-        {"albums", DDB_SHUFFLE_ALBUMS},
-        {"random", DDB_SHUFFLE_RANDOM}
-    };
-    DDB_IPC_DEBUG << "This is set_property_shuffle" << std::endl;
-    if (!arg.is_string()) {
-        throw std::invalid_argument("Invalid argument: shuffle must be a string.");
-    }
-    if(shuffles.count(arg)) {
-        DDB_IPC_DEBUG << shuffles.at(arg) << std::endl;
-        ddb_api->conf_set_int("playback.order", (int) shuffles.at(arg));
-        ddb_api->sendmessage(DB_EV_CONFIGCHANGED, 0, 0, 0);
-    } else {
-        throw std::invalid_argument("Invalid argument:shuffle must be one of: off, tracks, albums, random.");
-    }
-}
-
-void set_property_repeat(json arg) {
-    auto repeats = std::map<std::string, ddb_repeat_t> {
-        {"all", DDB_REPEAT_ALL},
-        {"off", DDB_REPEAT_OFF},
-        {"one", DDB_REPEAT_SINGLE},
-    };
-    if (!arg.is_string()) {
-        throw std::invalid_argument("Invalid argument: repeat must be a string.");
-    }
-    try {
-        ddb_api->conf_set_int("playback.loop", (int) repeats.at(arg));
-        ddb_api->sendmessage(DB_EV_CONFIGCHANGED, 0, 0, 0);
-        //ddb_api->streamer_set_repeat(values.at(value));
-    } catch (std::invalid_argument& e) {
-        throw std::invalid_argument("Invalid argument:repeat must be one of: off, one, all.");
-    }
-}
-
-typedef json (*ipc_property_getter)();
-typedef void (*ipc_property_setter)(json);
-typedef json (*ipc_command)(int, json);
-
-json property_as_json(std::string prop) {
-    char buf[1024];
-    char def = '\0';
-    ddb_api->conf_get_str(
-        prop.c_str(),
-        &def, buf, sizeof(buf)
-    );
-    std::string value(buf);
-    try {
-        return stoll(value);
-    } catch (std::invalid_argument& e) {}
-    try {
-        return stod(value);
-    } catch (std::invalid_argument& e) {}
-    return value;
-}
-
-json command_get_property(int id, json args) {
-    if (!args.contains("property") ) {
-        return bad_request_response(id, std::string("Argument property is mandatory"));
-    }
-    if (!args["property"].is_string() ) {
-        return bad_request_response(id, std::string("Argument property must be a string"));
-    }
-    std::string prop = args["property"];
-    json resp = ok_response(id);
-    resp["property"] = args["property"];
-    // properties that should be processed before returning
-    std::map<std::string, ipc_property_getter> getters = {
-        {"volume", get_property_volume},
-        {"shuffle", get_property_shuffle},
-        {"repeat", get_property_repeat},
-    };
-    if ( getters.count(prop) ) {
-        resp["value"] = getters[prop]();
-    } else {
-        resp["value"] = property_as_json(prop);
-    }
-    return(resp);
-}
-
-json command_set_property(int id, json args) {
-    if (!args.contains("property") ) {
-        return bad_request_response(id, std::string("Argument property is mandatory"));
-    }
-    if (!args["property"].is_string() ) {
-        return bad_request_response(id, std::string("Argument property must be a string"));
-    }
-    if (!args.contains("value") ) {
-        return bad_request_response(id, std::string("Argument value is mandatory"));
-    }
-    std::string prop = args["property"];
-    std::map<std::string, ipc_property_setter> setters = {
-        {"shuffle", set_property_shuffle},
-        {"repeat", set_property_repeat},
-    };
-    if( setters.count(prop) ) {
-        try {
-            setters[prop](args["value"]);
-        } catch (std::exception& e) {
-            return error_response(id, e.what() );
-        }
-        return ok_response(id);
-    }
-    const char* propc = prop.c_str();
-    if( args["value"].is_number_integer() ){
-        ddb_api->conf_set_int(propc, args["value"] );
-    } else if( args["value"].is_number_float() ){
-        ddb_api->conf_set_float(propc, args["value"] );
-    } else if( args["value"].is_string() ){
-        std::string val = args["value"];
-        ddb_api->conf_set_str(propc, val.c_str() );
-    } else {
-        return bad_request_response(id, std::string("Argument property must be a string or number"));
-    }
-    return ok_response(id);
-}
-
 
 void handle_message(json message, int socket){
     json response;
@@ -384,7 +134,10 @@ void handle_message(json message, int socket){
     }
     if ( !message.contains("command") || message["command"].type() != json::value_t::string ) {
         DDB_IPC_WARN << "Bad request: `command` field must be present and must be a string." << std::endl;
-        response = bad_request_response(id, "`command` field must be present and must be a string.");
+        response = bad_request_response(
+            id,
+            std::string("`command` field must be present and must be a string.")
+        );
         send_response(response, socket);
         return;
     }
@@ -640,6 +393,8 @@ DB_plugin_t* load(DB_functions_t* api) {
     return &definition_;
 }
 
+}
+
 extern "C" DB_plugin_t* ddb_ipc_load(DB_functions_t* api) {
-    return load(api);
+    return ddb_ipc::load(api);
 }

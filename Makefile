@@ -14,18 +14,18 @@ OUT=$(BUILDDIR)/ddb_ipc.so
 SOURCES?=$(wildcard $(SRCDIR)/*.cpp)
 TESTSOURCES?=$(wildcard $(TESTDIR)/*.cpp)
 COMMON=
-OBJ?=$(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/%.o, $(SOURCES))
-TESTOBJ?=$(patsubst $(TESTDIR)/%.cpp, $(BUILDDIR)/%.o, $(TESTSOURCES))
+OBJ?=$(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/%.lo, $(SOURCES))
+TESTOBJ?=$(patsubst $(TESTDIR)/%.cpp, $(BUILDDIR)/%.lo, $(TESTSOURCES))
 
 all: $(OUT)
 
 install: $(OUT)
 	cp -t ~/.local/lib/deadbeef $(OUT)
 
-$(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/%.hpp $(COMMON)
+$(BUILDDIR)/%.lo: $(SRCDIR)/%.cpp $(SRCDIR)/%.hpp $(COMMON)
 	$(CXX) $(CFLAGS) $< -c -o $@
 
-$(BUILDDIR)/%.o: $(TESTDIR)/%.cpp $(TESTDIR)/%.hpp $(COMMON)
+$(BUILDDIR)/%.lo: $(TESTDIR)/%.cpp $(TESTDIR)/%.hpp $(COMMON)
 	$(CXX) $(CFLAGS) $< -c -o $@
 
 $(OUT): $(OBJ)

@@ -48,6 +48,7 @@
 #define DDB_IPC_RESPONSE_ERR    "ERROR"
 #define DDB_IPC_RESPONSE_BADQ   "BAD REQUEST"
 
+#include <string>
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -62,7 +63,11 @@ using json = nlohmann::json;
 
 namespace ddb_ipc{
 
-DB_functions_t* ddb_api;
+extern DB_functions_t* ddb_api;
+
+json ok_response(int id);
+json bad_request_response(int id, std::string mess);
+json error_response(int id, std::string mess);
 
 }
 #endif
