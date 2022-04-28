@@ -143,20 +143,6 @@ void handle_message(json message, int socket){
         message["args"] = {};
     }
     message["args"]["socket"] = socket;
-    std::map<std::string, ipc_command> commands = {
-        {"play", command_play},
-        {"pause", command_pause},
-        {"play-pause", command_play_pause},
-        {"stop", command_stop},
-        {"set-volume", command_set_volume},
-        {"adjust-volume", command_adjust_volume},
-        {"toggle-mute", command_toggle_mute},
-        {"seek", command_seek},
-        {"get-playpos", command_get_playpos},
-        {"get-property", command_get_property},
-        {"set-property", command_set_property},
-        {"observe-property", command_observe_property}
-    };
     try {
         response = commands.at(message["command"])(id, message["args"]);
     } catch (std::out_of_range& e) {

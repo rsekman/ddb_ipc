@@ -8,10 +8,9 @@ using json = nlohmann::json;
 
 namespace ddb_ipc {
 
-// extern DB_functions_t* ddb_api;
-
 typedef json (*ipc_command)(int, json);
 
+extern std::map<std::string, ipc_command> commands;
 
 json command_play(int id, json args);
 json command_pause(int id, json args);
