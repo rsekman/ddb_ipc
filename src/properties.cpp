@@ -1,4 +1,5 @@
 #include <iostream>
+#include <set>
 
 #include <nlohmann/json.hpp>
 #include "ddb_ipc.hpp"
@@ -8,6 +9,8 @@
 using json = nlohmann::json;
 
 namespace ddb_ipc {
+
+std::map<int, std::set<std::string>> observers = {};
 
 json get_property_volume() {
     float mindb = ddb_api->volume_get_min_db();
@@ -105,6 +108,13 @@ json property_as_json(std::string prop) {
     return value;
 }
 
+// properties that should be processed before returning
+std::map<std::string, ipc_property_getter> getters = {
+    {"volume", get_property_volume},
+    {"shuffle", get_property_shuffle},
+    {"repeat", get_property_repeat},
+};
+
 json command_get_property(int id, json args) {
     if (!args.contains("property") ) {
         return bad_request_response(id, std::string("Argument property is mandatory"));
@@ -115,12 +125,6 @@ json command_get_property(int id, json args) {
     std::string prop = args["property"];
     json resp = ok_response(id);
     resp["property"] = args["property"];
-    // properties that should be processed before returning
-    std::map<std::string, ipc_property_getter> getters = {
-        {"volume", get_property_volume},
-        {"shuffle", get_property_shuffle},
-        {"repeat", get_property_repeat},
-    };
     if ( getters.count(prop) ) {
         resp["value"] = getters[prop]();
     } else {
@@ -128,6 +132,11 @@ json command_get_property(int id, json args) {
     }
     return(resp);
 }
+
+std::map<std::string, ipc_property_setter> setters = {
+    {"shuffle", set_property_shuffle},
+    {"repeat", set_property_repeat},
+};
 
 json command_set_property(int id, json args) {
     if (!args.contains("property") ) {
@@ -140,10 +149,6 @@ json command_set_property(int id, json args) {
         return bad_request_response(id, std::string("Argument value is mandatory"));
     }
     std::string prop = args["property"];
-    std::map<std::string, ipc_property_setter> setters = {
-        {"shuffle", set_property_shuffle},
-        {"repeat", set_property_repeat},
-    };
     if( setters.count(prop) ) {
         try {
             setters[prop](args["value"]);
@@ -165,5 +170,21 @@ json command_set_property(int id, json args) {
     }
     return ok_response(id);
 }
+
+json command_observe_property(int id, json args) {
+    if(!args.contains("property")){
+        return bad_request_response(id, std::string("Argument property is mandatory"));
+    }
+    if(!args["property"].is_string()) {
+        return bad_request_response(id, std::string("Argument property must be a string"));
+    }
+    int s = (int) args["socket"];
+    if( !observers.count(s) ) {
+        observers[s] = std::set<std::string> ({});
+    }
+    observers[s].insert( (std::string) args["property"]);
+    return ok_response(id);
+}
+
 
 }

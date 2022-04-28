@@ -64,19 +64,25 @@ int open_socket(char* socket_path){
 
 // Send a message to one client
 
+void close_connection(int socket) {
+    DDB_IPC_DEBUG << "Closed connection with descriptor " << socket << std::endl;;
+    ::close(socket);
+    for(int i=0; i<= DDB_IPC_MAX_CONNECTIONS; i++){
+        if(fds[i].fd == socket) {
+            fds[i].fd = -1;
+            break;
+        }
+    }
+    observers.erase(socket);
+}
+
 void send_response(json response, int socket){
     std::string response_str = response.dump() + std::string("\n");
     if ( send(socket, response_str.c_str(), response_str.size(), MSG_NOSIGNAL) > 0 ) {
         DDB_IPC_DEBUG << "Responded: " << response << std::endl;
     } else{
         DDB_IPC_ERR << "Error sending response: errno " << errno << std::endl;
-        ::close(socket);
-        for(int i=0; i<= DDB_IPC_MAX_CONNECTIONS; i++){
-            if(fds[i].fd == socket) {
-                fds[i].fd = -1;
-                break;
-            }
-    }
+        close_connection(socket);
     }
     // TODO: error handling
 }
@@ -118,14 +124,6 @@ json error_response(int id, std::string mess) {
     return resp;
 }
 
-
-std::map<int, std::set<std::string>> observers {} ;
-
-json command_observe_property(int id, json args) {
-    // TODO implement observing
-    return json { } ;
-}
-
 void handle_message(json message, int socket){
     json response;
     int id = 0;
@@ -157,7 +155,7 @@ void handle_message(json message, int socket){
         {"get-playpos", command_get_playpos},
         {"get-property", command_get_property},
         {"set-property", command_set_property},
-        {"observe-property", command_observe_property},
+        {"observe-property", command_observe_property}
     };
     try {
         response = commands.at(message["command"])(id, message["args"]);
@@ -172,7 +170,7 @@ void* listen(void* sockname){
     int i;
     int rc;
     int new_conn, conn_accepted;
-    int close_conn;
+    int should_close_conn;
     char buf[DDB_IPC_MAX_MESSAGE_LENGTH];
     buf[0] = '\0';
     json message;
@@ -227,7 +225,7 @@ void* listen(void* sockname){
             }
         }
         for(i=1; i<= DDB_IPC_MAX_CONNECTIONS; i++){
-            close_conn = 0;
+            should_close_conn = 0;
             // TODO refactor this into its own function
             if( fds[i].revents & POLLIN ) {
                 do {
@@ -237,11 +235,11 @@ void* listen(void* sockname){
                     rc = recv(fds[i].fd, buf, DDB_IPC_MAX_MESSAGE_LENGTH, 0);
                     if( rc < 0) {
                         if( errno != EWOULDBLOCK ){
-                            close_conn = 1;
+                            should_close_conn = 1;
                         }
                         break;
                     } else if (rc == 0) {
-                        close_conn = 1;
+                        should_close_conn = 1;
                         break;
                     }
                     DDB_IPC_DEBUG << "Received message on descriptor " << fds[i].fd << ":"  << buf;
@@ -261,11 +259,8 @@ void* listen(void* sockname){
                         }
                     }
                 } while (1);
-                if(close_conn) {
-                    ::close(fds[i].fd);
-                    DDB_IPC_DEBUG << "Closed connection with descriptor " << fds[i].fd << std::endl;;
-                    // free up the slot
-                    fds[i].fd = -1;
+                if(should_close_conn) {
+                    close_connection(fds[i].fd);
                 }
             }
         }
@@ -276,6 +271,7 @@ void* listen(void* sockname){
             ::close(fds[i].fd);
         }
     }
+    observers.clear();
     return 0;
 }
 
@@ -326,10 +322,6 @@ void on_seek(ddb_event_playpos_t* ctx) {
     return;
 }
 
-void on_config_changed() {
-    DDB_IPC_DEBUG << "Config changed..." << std::endl;
-}
-
 void on_volume_change() {
     float mindb = ddb_api->volume_get_min_db();
     float vol = 100 * (mindb - ddb_api->volume_get_db())/mindb;
@@ -338,6 +330,32 @@ void on_volume_change() {
             {"property", "volume"},
             {"value", vol}
             } );
+}
+
+void on_config_changed() {
+    DDB_IPC_DEBUG << "Config changed..." << std::endl;
+    broadcast( json{ {"event", "config-changed"} } );
+    json resp;
+    for( auto obs = observers.begin(); obs != observers.end(); obs++) {
+        DDB_IPC_DEBUG << "Observer #" << obs->first << std::endl;
+        auto propset = obs->second;
+        for( auto prop = propset.begin(); prop != propset.end(); prop++){
+            resp = json {
+                {"event", "property-change"},
+                {"property", *prop}
+            };
+            if ( getters.count(*prop) ) {
+                resp["value"] = getters[*prop]();
+            } else {
+                resp["value"] = property_as_json(*prop);
+            }
+            DDB_IPC_DEBUG << "Property " << *prop << "; value " << resp["value"] << std::endl;
+            send_response(
+                    resp,
+                obs->first
+            );
+        }
+    }
 }
 
 int handleMessage(uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2){
