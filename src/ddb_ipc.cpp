@@ -12,12 +12,13 @@
 
 #include <pthread.h>
 
-#include <deadbeef/deadbeef.h>
 
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
 #include "ddb_ipc.hpp"
+
+#include <deadbeef/deadbeef.h>
 
 using namespace ddb_ipc;
 
