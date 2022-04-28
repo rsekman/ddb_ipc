@@ -1,18 +1,19 @@
 #include <stdexcept>
-#include <stdlib.h>
 #include <iostream>
-#include <string.h>
 #include <string>
+#include <set>
+
 #include <errno.h>
+
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <sys/un.h>
 #include <unistd.h>
 
 #include <pthread.h>
-#include <linux/limits.h>
 
 #include <deadbeef/deadbeef.h>
+
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
