@@ -113,6 +113,7 @@ std::map<std::string, ipc_property_getter> getters = {
     {"volume", get_property_volume},
     {"shuffle", get_property_shuffle},
     {"repeat", get_property_repeat},
+    {"mute", get_property_mute},
 };
 
 json command_get_property(int id, json args) {

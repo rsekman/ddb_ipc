@@ -80,6 +80,7 @@ json command_toggle_mute(int id, json args) {
     } else {
         ddb_api->audio_set_mute(1);
     }
+    ddb_api->sendmessage(DB_EV_CONFIGCHANGED, 0, 0, 0);
     return ok_response(id);
 }
 
