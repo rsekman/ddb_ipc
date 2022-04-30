@@ -9,8 +9,21 @@ using json = nlohmann::json;
 namespace ddb_ipc {
 
 typedef json (*ipc_command)(int, json);
+enum arg_type {
+    ARG_POLYMORPHIC,
+    ARG_NUMBER,
+    ARG_INT,
+    ARG_STRING,
+};
+typedef struct arg_s {
+    bool mandatory;
+    arg_type type;
+} arg_t;
+typedef std::map<std::string, arg_t> arg_schema;
 
 extern std::map<std::string, ipc_command> commands;
+
+void validate_arguments(arg_schema schema, json args);
 
 json command_play(int id, json args);
 json command_pause(int id, json args);

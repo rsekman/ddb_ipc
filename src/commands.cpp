@@ -1,4 +1,6 @@
 #include <iostream>
+#include <sstream>
+#include <stdexcept>
 
 #include <nlohmann/json.hpp>
 #include "ddb_ipc.hpp"
@@ -39,12 +41,59 @@ json command_next(int id, json args) {
     return ok_response(id);
 }
 
-json command_set_volume(int id, json args) {
-    if( !args.contains("volume") ) {
-        return bad_request_response(id, std::string("Argument volume is mandatory"));
+// TODO refactor checking for arguments and types ...
+
+void validate_arguments(arg_schema schema, json args) {
+    arg_t arg;
+    std::string arg_name;
+    std::ostringstream  error;
+    bool invalid_type = false;
+    std::string type_name;
+    for (auto i = schema.begin(); i != schema.end(); i++) {
+        arg_name = i->first;
+        arg = i->second;
+        if ( args.contains(arg_name)) {
+            switch ( arg.type ) {
+                case ARG_POLYMORPHIC:
+                    break;
+                case ARG_NUMBER:
+                    if (!args[arg_name].is_number() ){
+                        invalid_type = true;
+                        type_name = "a number";
+                    }
+                    break;
+                case ARG_INT:
+                    if (!args[arg_name].is_number_integer() ){
+                        invalid_type = true;
+                        type_name = "an integer";
+                    }
+                    break;
+                case ARG_STRING:
+                    if (!args[arg_name].is_string() ){
+                        invalid_type = true;
+                        type_name = "a string";
+                    }
+                    break;
+            }
+            if (invalid_type) {
+                error << "Argument " << arg_name << " must be " << type_name;
+                throw std::invalid_argument(error.str());
+            }
+        } else if(arg.mandatory) {
+            error << "Argument " << i->first << " is mandatory";
+            throw std::invalid_argument(error.str());
+        }
     }
-    if(!args["volume"].is_number()) {
-        return bad_request_response(id, std::string("Argument volume must be a float"));
+}
+
+json command_set_volume(int id, json args) {
+    arg_schema as = {
+        {"volume", {true, ARG_NUMBER}}
+    };
+    try {
+        validate_arguments(as, args);
+    } catch (std::invalid_argument& e) {
+        return bad_request_response(id, e.what());
     }
     float vol = args["volume"];
     float mindb = ddb_api->volume_get_min_db();
@@ -56,11 +105,13 @@ json command_set_volume(int id, json args) {
 }
 
 json command_adjust_volume(int id, json args) {
-    if( !args.contains("adjustment") ) {
-        return bad_request_response(id, std::string("Argument adjustment is mandatory"));
-    }
-    if( !args["adjustment"].is_number() ) {
-        return bad_request_response(id, std::string("Argument adjustment must be a float"));
+    arg_schema as = {
+        {"adjustment", {true, ARG_NUMBER}}
+    };
+    try {
+        validate_arguments(as, args);
+    } catch (std::invalid_argument& e) {
+        return bad_request_response(id, e.what());
     }
     float adj = ((float) args["adjustment"])/100;
     if(adj > 1 || adj < -1) {
@@ -104,8 +155,23 @@ json command_get_playpos(int id, json args) {
     );
     return resp;
 }
-json command_seek(int id, json args){
+json command_seek(int id, json args) {
     // TODO implement seeking
+    return error_response(id, std::string("Not implemented"));
+}
+
+json command_get_currently_playing(int id, json args) {
+    // TODO implement
+    // if arg format present, return using that format
+    // otherwise return using default format
+    return error_response(id, std::string("Not implemented"));
+}
+
+json command_get_current_cover_art(int id, json args) {
+    // TODO implement
+    // return the cover as a base64-encoded string
+    // on the ur side, decode and save to a temp file
+    // may have to think about buffers?
     return error_response(id, std::string("Not implemented"));
 }
 

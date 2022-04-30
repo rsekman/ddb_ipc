@@ -3,6 +3,7 @@
 
 #include <nlohmann/json.hpp>
 #include "ddb_ipc.hpp"
+#include "commands.hpp"
 #include "properties.hpp"
 #include <deadbeef/deadbeef.h>
 
@@ -117,11 +118,13 @@ std::map<std::string, ipc_property_getter> getters = {
 };
 
 json command_get_property(int id, json args) {
-    if (!args.contains("property") ) {
-        return bad_request_response(id, std::string("Argument property is mandatory"));
-    }
-    if (!args["property"].is_string() ) {
-        return bad_request_response(id, std::string("Argument property must be a string"));
+    arg_schema as = {
+        {"property", {true, ARG_STRING}},
+    };
+    try {
+        validate_arguments(as, args);
+    } catch (std::invalid_argument& e) {
+        return bad_request_response(id, e.what());
     }
     std::string prop = args["property"];
     json resp = ok_response(id);
@@ -140,14 +143,14 @@ std::map<std::string, ipc_property_setter> setters = {
 };
 
 json command_set_property(int id, json args) {
-    if (!args.contains("property") ) {
-        return bad_request_response(id, std::string("Argument property is mandatory"));
-    }
-    if (!args["property"].is_string() ) {
-        return bad_request_response(id, std::string("Argument property must be a string"));
-    }
-    if (!args.contains("value") ) {
-        return bad_request_response(id, std::string("Argument value is mandatory"));
+    arg_schema as = {
+        {"property", {true, ARG_STRING}},
+        {"value", {true, ARG_POLYMORPHIC}}
+    };
+    try {
+        validate_arguments(as, args);
+    } catch (std::invalid_argument& e) {
+        return bad_request_response(id, e.what());
     }
     std::string prop = args["property"];
     if( setters.count(prop) ) {
@@ -173,11 +176,13 @@ json command_set_property(int id, json args) {
 }
 
 json command_observe_property(int id, json args) {
-    if(!args.contains("property")){
-        return bad_request_response(id, std::string("Argument property is mandatory"));
-    }
-    if(!args["property"].is_string()) {
-        return bad_request_response(id, std::string("Argument property must be a string"));
+    arg_schema as = {
+        {"property", {true, ARG_STRING}},
+    };
+    try {
+        validate_arguments(as, args);
+    } catch (std::invalid_argument& e) {
+        return bad_request_response(id, e.what());
     }
     int s = (int) args["socket"];
     if( !observers.count(s) ) {
