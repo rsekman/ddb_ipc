@@ -364,9 +364,7 @@ int handleMessage(uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2){
         case DB_EV_SEEKED:
             on_seek( (ddb_event_playpos_t*) ctx);
             break;
-        case DB_EV_NEXT:
-        case DB_EV_PREV:
-        case DB_EV_PLAY_CURRENT:
+        case DB_EV_SONGCHANGED:
             on_track_changed();
             break;
         case DB_EV_VOLUMECHANGED:
