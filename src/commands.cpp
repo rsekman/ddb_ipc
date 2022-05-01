@@ -10,7 +10,6 @@
 #include "ddb_ipc.hpp"
 #include "commands.hpp"
 #include "properties.hpp"
-#include "../submodules/cpp-base64/base64.h"
 #include <deadbeef/deadbeef.h>
 #include <deadbeef/plugins/artwork/artwork.h>
 

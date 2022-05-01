@@ -20,7 +20,9 @@ COMMON=
 SUBOBJ=
 
 OBJ=$(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/%.lo, $(SOURCES))
+ifneq ($(SUBOBJ),)
 OBJ+=$(addprefix submodules,/$(SUBOBJ))
+endif
 
 all: $(OUT)
 
@@ -44,7 +46,7 @@ submodules/%.o:
 	$(MAKE) -C $(dir $@) $(notdir $@)
 
 $(OUT): $(OBJ)
-	$(CXX) $(CFLAGS$) $(LDFLAGS) $(OBJ) -o $@
+	$(CXX) $(CFLAGS) $(LDFLAGS) $(OBJ) -o $@
 
 
 $(BUILDDIR):
