@@ -17,7 +17,7 @@ SOURCES?=$(wildcard $(SRCDIR)/*.cpp)
 TESTSOURCES?=$(wildcard $(TESTDIR)/*.cpp)
 COMMON=
 
-SUBOBJ=cpp-base64/base64.o
+SUBOBJ=
 
 OBJ=$(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/%.lo, $(SOURCES))
 OBJ+=$(addprefix submodules,/$(SUBOBJ))
