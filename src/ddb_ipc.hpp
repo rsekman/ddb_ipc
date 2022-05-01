@@ -57,6 +57,7 @@
 #include <linux/limits.h>
 
 #include <deadbeef/deadbeef.h>
+#include <deadbeef/plugins/artwork/artwork.h>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -64,10 +65,13 @@ using json = nlohmann::json;
 namespace ddb_ipc{
 
 extern DB_functions_t* ddb_api;
+extern ddb_artwork_plugin_t* ddb_artwork;
 
 json ok_response(int id);
 json bad_request_response(int id, std::string mess);
 json error_response(int id, std::string mess);
+
+void send_response(json msg, int socket);
 
 }
 #endif

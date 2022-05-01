@@ -1,0 +1,4 @@
+[submodule "submodules/cpp-base64"]
+	path = submodules/cpp-base64
+	url = https://github.com/rsekman/cpp-base64.git
+	branch = master

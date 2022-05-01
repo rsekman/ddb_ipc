@@ -1,8 +1,10 @@
 .PHONY: clean install
 
 CXX?=g++
-CFLAGS+=-Wall -g -O2 -fPIC -D_GNU_SOURCE
+CFLAGS+=-Wall -g -O2 -fPIC -D_GNU_SOURCE --std=c++17
 LDFLAGS+=-shared
+
+export CXX CFLAGS
 
 BUILDDIR=build
 SRCDIR=src
@@ -14,8 +16,11 @@ OUT=$(BUILDDIR)/ddb_ipc.so
 SOURCES?=$(wildcard $(SRCDIR)/*.cpp)
 TESTSOURCES?=$(wildcard $(TESTDIR)/*.cpp)
 COMMON=
-OBJ?=$(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/%.lo, $(SOURCES))
-TESTOBJ?=$(patsubst $(TESTDIR)/%.cpp, $(BUILDDIR)/%.lo, $(TESTSOURCES))
+
+SUBOBJ=cpp-base64/base64.o
+
+OBJ=$(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/%.lo, $(SOURCES))
+OBJ+=$(addprefix submodules,/$(SUBOBJ))
 
 all: $(OUT)
 
@@ -25,11 +30,22 @@ install: $(OUT)
 $(BUILDDIR)/%.lo: $(SRCDIR)/%.cpp $(SRCDIR)/%.hpp $(COMMON)
 	$(CXX) $(CFLAGS) $< -c -o $@
 
-$(BUILDDIR)/%.lo: $(TESTDIR)/%.cpp $(TESTDIR)/%.hpp $(COMMON)
-	$(CXX) $(CFLAGS) $< -c -o $@
+$(BUILDDIR)/%.lo: submodules/%.o
+	cp $< $@
+
+$(BUILDDIR)/%.lo: submodules/%.lo
+	cp $< $@
+
+submodules/%.lo:
+	$(MAKE) -C $(dir $@) $(notdir $@)
+
+submodules/%.o:
+	echo $(SUBOBJ) $@
+	$(MAKE) -C $(dir $@) $(notdir $@)
 
 $(OUT): $(OBJ)
 	$(CXX) $(CFLAGS$) $(LDFLAGS) $(OBJ) -o $@
+
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)

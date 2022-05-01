@@ -1,12 +1,18 @@
 #include <iostream>
+#include <random>
 #include <sstream>
+#include <fstream>
 #include <stdexcept>
 
+#include <limits.h>
 #include <nlohmann/json.hpp>
+
 #include "ddb_ipc.hpp"
 #include "commands.hpp"
 #include "properties.hpp"
+#include "../submodules/cpp-base64/base64.h"
 #include <deadbeef/deadbeef.h>
+#include <deadbeef/plugins/artwork/artwork.h>
 
 using json = nlohmann::json;
 namespace ddb_ipc {
@@ -199,21 +205,94 @@ json command_toggle_stop_after_current_album(int id, json args) {
     return ok_response(id);
 }
 
+std::random_device rd;
+std::mt19937 mersenne_twister(rd());
+auto dist = std::uniform_int_distribution<long>(LONG_MIN, LONG_MAX);
+
+typedef struct {
+    int socket;
+    int id;
+} response_addr_t;
+
+void callback_cover_art_found (int error, ddb_cover_query_t *query, ddb_cover_info_t *cover) {
+    response_addr_t* addr  = (response_addr_t*) (query->user_data);
+    json response = json {
+        {"request_id", addr->id}
+    };
+    DDB_IPC_DEBUG << "Entered cover art callback for descriptor " << addr->socket << std::endl;
+    if (
+        (query->flags & DDB_ARTWORK_FLAG_CANCELLED) ||
+        cover == NULL ||
+        cover->image_filename == NULL
+    ) {
+        response["status"] = DDB_IPC_RESPONSE_ERR;
+        response["message"] = "No cover art found";
+    } else {
+        std::ifstream cover_file(
+            cover->image_filename,
+            std::ios::binary | std::ios::ate
+        );
+        std::streamsize cover_size = cover_file.tellg();
+        cover_file.seekg(0, std::ios::beg);
+        char* buffer = (char*) malloc(cover_size * sizeof(char));
+        cover_file.read(buffer, cover_size);
+        std::string cover_base64 = base64_encode(
+            (unsigned char*) buffer,
+            cover_size,
+            false
+        );
+        response["cover-art-blob"] = cover_base64;
+        free(buffer);
+
+    }
+    send_response(response, addr->socket);
+    ddb_api->pl_item_unref(query->track);
+    free(query->user_data);
+    free(query);
+}
+
+ddb_cover_query_t* cover_query = NULL;
+json command_request_cover_art(int id, json args) {
+    DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
+    if (!cur) {
+        return error_response(id, "Not playing");
+    }
+    ddb_api->pl_item_ref(cur);
+    int64_t sid = dist(mersenne_twister);
+    DDB_IPC_DEBUG << "Received cover art request, dispatching with sid=" << sid << std::endl;
+    ddb_cover_query_t* cover_query = (ddb_cover_query_t*) calloc(sizeof(ddb_cover_query_t), 1);
+    cover_query->flags = 0;
+    cover_query->track = (DB_playItem_t*) cur;
+    cover_query->source_id = sid;
+    cover_query->user_data = malloc(sizeof(response_addr_t));
+    cover_query->_size = sizeof(ddb_cover_query_t);
+    response_addr_t addr = {
+        .socket = args["socket"],
+        .id = id,
+    };
+    *(response_addr_t*) cover_query->user_data = addr;
+    ddb_artwork->cover_get(cover_query, callback_cover_art_found);
+    DDB_IPC_DEBUG << "Sent cover art query" << std::endl;
+    return ok_response(id);
+}
+
+
 std::map<std::string, ipc_command> commands = {
-  {"play", command_play},
-  {"pause", command_pause},
-  {"play-pause", command_play_pause},
-  {"stop", command_stop},
-  {"set-volume", command_set_volume},
-  {"adjust-volume", command_adjust_volume},
-  {"toggle-mute", command_toggle_mute},
-  {"seek", command_seek},
-  {"get-playpos", command_get_playpos},
-  {"toggle-stop-after-current-track", command_toggle_stop_after_current_track},
-  {"toggle-stop-after-current-album", command_toggle_stop_after_current_album},
-  {"get-property", command_get_property},
-  {"set-property", command_set_property},
-  {"observe-property", command_observe_property}
+    {"play", command_play},
+    {"pause", command_pause},
+    {"play-pause", command_play_pause},
+    {"stop", command_stop},
+    {"set-volume", command_set_volume},
+    {"adjust-volume", command_adjust_volume},
+    {"toggle-mute", command_toggle_mute},
+    {"seek", command_seek},
+    {"get-playpos", command_get_playpos},
+    {"toggle-stop-after-current-track", command_toggle_stop_after_current_track},
+    {"toggle-stop-after-current-album", command_toggle_stop_after_current_album},
+    {"request-cover-art", command_request_cover_art},
+    {"get-property", command_get_property},
+    {"set-property", command_set_property},
+    {"observe-property", command_observe_property}
 };
 
 }

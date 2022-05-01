@@ -25,6 +25,7 @@ using json = nlohmann::json;
 namespace ddb_ipc{
 
 DB_functions_t* ddb_api;
+ddb_artwork_plugin_t* ddb_artwork;
 
 const char configDialog_ [] =
     "property \"Socket location\" entry " DDB_IPC_PROJECT_ID ".socketpath \"" DDB_IPC_DEFAULT_SOCKET "\" ;\n";
@@ -78,10 +79,20 @@ void close_connection(int socket) {
 
 void send_response(json response, int socket){
     std::string response_str = response.dump() + std::string("\n");
-    if ( send(socket, response_str.c_str(), response_str.size(), MSG_NOSIGNAL) > 0 ) {
-        DDB_IPC_DEBUG << "Responded: " << response << std::endl;
+    int resp_len = response_str.length();
+    if ( send(socket, response_str.c_str(), resp_len, MSG_NOSIGNAL) > 0 ) {
+        if (resp_len > 1024 + 20 ) {
+            DDB_IPC_DEBUG
+                << "Responded: "
+                << response_str.substr(0, 512)
+                << " [..., " << resp_len - 1024 << " characters omitted] "
+                << response_str.substr(resp_len - 512, 512)
+                << std::endl;
+        } else {
+            DDB_IPC_DEBUG << "Responded: " << response << std::endl;
+        }
     } else{
-        DDB_IPC_ERR << "Error sending response: errno " << errno << std::endl;
+        DDB_IPC_ERR << "Error sending response on descriptor " << socket << ": errno " << errno << std::endl;
         close_connection(socket);
     }
     // TODO: error handling
@@ -281,6 +292,7 @@ int disconnect(){
 }
 
 int connect(){
+    ddb_artwork = (ddb_artwork_plugin_t*) ddb_api->plug_get_for_id("artwork2");
     return 0;
 }
 
