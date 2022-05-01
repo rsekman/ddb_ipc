@@ -21,7 +21,7 @@ SOURCES?=$(wildcard $(SRCDIR)/*.cpp)
 TESTSOURCES?=$(wildcard $(TESTDIR)/*.cpp)
 COMMON=
 
-SUBOBJ=
+SUBOBJ=cpp-base64/base64.o
 
 OBJ=$(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/%.lo, $(SOURCES))
 ifneq ($(SUBOBJ),)
@@ -51,6 +51,7 @@ submodules/%.o:
 
 $(OUT): $(OBJ)
 	$(CXX) $(CFLAGS) $(LDFLAGS) $(OBJ) -o $@
+
 
 
 $(BUILDDIR):

@@ -3,7 +3,6 @@
 #include <sstream>
 #include <fstream>
 #include <stdexcept>
-#include <vector>
 
 #include <limits.h>
 #include <nlohmann/json.hpp>
@@ -11,6 +10,7 @@
 #include "ddb_ipc.hpp"
 #include "commands.hpp"
 #include "properties.hpp"
+#include "../submodules/cpp-base64/base64.h"
 #include <deadbeef/deadbeef.h>
 #include <deadbeef/plugins/artwork/artwork.h>
 
@@ -292,31 +292,55 @@ std::random_device rd;
 std::mt19937 mersenne_twister(rd());
 auto dist = std::uniform_int_distribution<long>(LONG_MIN, LONG_MAX);
 
+std::set<std::string> cover_art_formats = {
+    "filename",
+    "blob",
+};
+
 typedef struct {
     int socket;
     int id;
-    json accepted;
+    std::set<std::string>* accepted;
 } response_addr_t;
 
 void callback_cover_art_found (int error, ddb_cover_query_t *query, ddb_cover_info_t *cover) {
     response_addr_t* addr  = (response_addr_t*) (query->user_data);
-    json response = json {
-        {"request_id", addr->id}
-    };
+    json resp;
     DDB_IPC_DEBUG << "Entered cover art callback for descriptor " << addr->socket << std::endl;
     if (
         (query->flags & DDB_ARTWORK_FLAG_CANCELLED) ||
         cover == NULL ||
         cover->image_filename == NULL
     ) {
-        response["status"] = DDB_IPC_RESPONSE_ERR;
-        response["response"] = "No cover art found";
+        resp = error_response(addr->id, "No cover art found");
     } else {
-        response["cover-art-filename"] = cover->image_filename;
-
+        resp = ok_response(addr->id);
+        if (addr->accepted->count("filename") > 0) {
+            DDB_IPC_DEBUG << "Responding with filename." << std::endl;
+            resp["filename"] = cover->image_filename;
+        }
+        if (addr->accepted->count("blob") > 0) {
+            DDB_IPC_DEBUG << "Responding with blob." << std::endl;
+            std::ifstream cover_file(
+                    cover->image_filename,
+                    std::ios::binary | std::ios::ate
+                    );
+            std::streamsize cover_size = cover_file.tellg();
+            cover_file.seekg(0, std::ios::beg);
+            char* buffer = (char*) malloc(cover_size * sizeof(char));
+            cover_file.read(buffer, cover_size);
+            std::string cover_base64 = base64_encode(
+                    (unsigned char*) buffer,
+                    cover_size,
+                    false
+                    );
+            resp["blob"] = cover_base64;
+            free(buffer);
+        }
     }
-    send_response(response, addr->socket);
+    send_response(resp, addr->socket);
     ddb_api->pl_item_unref(query->track);
+    free(addr->accepted);
     free(query->user_data);
     free(query);
 }
@@ -331,31 +355,37 @@ json command_request_cover_art(int id, json args) {
     } catch (std::invalid_argument &e) {
         return bad_request_response(id, e.what());
     }
-    if (!args.contains("accept")) {
-        args["accept"] = json::array({"filename"});
+    DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
+    if (!cur) {
+        return error_response(id, "Not playing");
     }
-    auto accepted = std::vector<std::string>( {
-            "filename",
-            "blob",
-            } );
-    bool any_accepted = false;
-    for(auto a = accepted.begin(); a != accepted.end(); a++){
-        if (std::find(args["accepted"].begin(), args["accepted"].end(), *a) != args["accepted"].end()){
-            any_accepted = true;
-            break;
+    std::set<std::string>* accepted;
+    accepted = new std::set<std::string>();
+    if (!args.contains("accept")) {
+        DDB_IPC_DEBUG << "Accepting filename" << std::endl;
+        accepted->insert("filename");
+        DDB_IPC_DEBUG << "Accepting filename" << std::endl;
+    } else {
+        DDB_IPC_DEBUG << "Checking for what to accept." << std::endl;
+        for(auto a = args["accept"].begin(); a != args["accept"].end(); a++){
+            DDB_IPC_DEBUG << "Accepting " << *a << "?" << std::endl;
+            if (!a->is_string()) {
+                DDB_IPC_DEBUG << "Not a string: " << *a << std::endl;
+                continue;
+            }
+            if (cover_art_formats.count((std::string) *a) > 0) {
+                accepted->insert((std::string) *a);
+            }
         }
     }
-    if (!any_accepted) {
-        std::string err_msg("Argument must include at least one of the values: ");
-        for(auto a = accepted.begin(); a != accepted.end(); a++){
+    DDB_IPC_DEBUG << "Accepting formats." << std::endl;
+    if (accepted->empty()) {
+        std::string err_msg("Argument must include at least one of the values:");
+        for(auto a = cover_art_formats.begin(); a != cover_art_formats.end(); a++){
             err_msg.append(" ");
             err_msg.append(*a);
         }
         return error_response(id, err_msg);
-    }
-    DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
-    if (!cur) {
-        return error_response(id, "Not playing");
     }
     ddb_api->pl_item_ref(cur);
     int64_t sid = dist(mersenne_twister);
@@ -369,7 +399,7 @@ json command_request_cover_art(int id, json args) {
     response_addr_t addr = {
         .socket = args["socket"],
         .id = id,
-        .accepted = args["accepted"],
+        .accepted = accepted,
     };
     *(response_addr_t*) cover_query->user_data = addr;
     ddb_artwork->cover_get(cover_query, callback_cover_art_found);
