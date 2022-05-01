@@ -158,6 +158,7 @@ json command_get_playpos(int id, json args) {
             }
         }
     );
+    ddb_api->pl_item_unref(cur);
     return resp;
 }
 json command_seek(int id, json args) {
