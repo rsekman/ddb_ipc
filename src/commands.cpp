@@ -228,21 +228,7 @@ void callback_cover_art_found (int error, ddb_cover_query_t *query, ddb_cover_in
         response["status"] = DDB_IPC_RESPONSE_ERR;
         response["message"] = "No cover art found";
     } else {
-        std::ifstream cover_file(
-            cover->image_filename,
-            std::ios::binary | std::ios::ate
-        );
-        std::streamsize cover_size = cover_file.tellg();
-        cover_file.seekg(0, std::ios::beg);
-        char* buffer = (char*) malloc(cover_size * sizeof(char));
-        cover_file.read(buffer, cover_size);
-        std::string cover_base64 = base64_encode(
-            (unsigned char*) buffer,
-            cover_size,
-            false
-        );
-        response["cover-art-blob"] = cover_base64;
-        free(buffer);
+        response["cover-art-filename"] = cover->image_filename;
 
     }
     send_response(response, addr->socket);
