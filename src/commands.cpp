@@ -247,11 +247,15 @@ json command_get_now_playing(int id, json args) {
     }
     const char* fmt = fmt_str.c_str();
     char* code = ddb_api->tf_compile(fmt);
-    ddb_api->tf_eval(&ctx, code, buf, 4096);
-    ddb_api->tf_free(code);
+    if (code == NULL) {
+        resp = error_response(id, "Compilation of title format failed.");
+    } else {
+        ddb_api->tf_eval(&ctx, code, buf, 4096);
+        ddb_api->tf_free(code);
+        resp = ok_response(id);
+        resp["now-playing"] = std::string(buf);
+    }
     ddb_api->pl_item_unref(cur);
-    resp = ok_response(id);
-    resp["now-playing"] = std::string(buf);
     return resp;
 }
 
