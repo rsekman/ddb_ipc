@@ -4,7 +4,7 @@ IPC Plugin for the DeaDBeeF Audio Player
 Allows other programs to communicate with and control DeaDBeeF by reading and writing JSON messages to a socket.
 Inspired by the corresponding functionality in `mpv --input-ipc-server`.
 
-I mainly developed this to enable [`ur-ddb-ipc`](https://github.com/rsekman/unified-remote-mpv-ipc).
+I mainly developed this to enable [`ur-ddb-ipc`](https://github.com/rsekman/ur-ddb-ipc).
 Together they will let you monitor and control DeaDBeeF from your smartphone.
 
 ## Dependencies
@@ -32,9 +32,20 @@ Configure a path to the communication socket (default: `/tmp/ddb_socket`).
 Read and write JSON to it.
 
 ```sh
-% tee $(tty) < cmd | socat - /tmp/ddb_socket
-{"command":"get-now-playing","args":{"format":"%artist% - '['%album% - #%tracknumber%']' %title%"},"request_id":1}
-{"now-playing":"Blind Guardian - [Nightfall In Middle-Earth - #04] Nightfall","request_id":1,"status":"OK"}
+% tee >(jq .) < cmd | socat - /tmp/ddb_socket | jq .
+{
+  "command": "get-now-playing",
+  "args": {
+    "format": "%artist% - '['%album% - #%tracknumber%']' %title%"
+  },
+  "request_id": 1
+}
+{
+  "now-playing": "Blind Guardian - [Nightfall In Middle-Earth - #04] Nightfall",
+  "request_id": 1,
+  "status": "OK"
+}
+
 ```
 
 ## Protocol
