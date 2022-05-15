@@ -239,13 +239,12 @@ void* listen(void* sockname){
                         should_close_conn = 1;
                         break;
                     }
-                    DDB_IPC_DEBUG << "Received message on descriptor " << fds[i].fd << ":"  << buf;
+                    DDB_IPC_DEBUG << "Received message on descriptor " << fds[i].fd << ": "  << buf;
                     std::istringstream msg(buf);
                     std::string l;
                     while ( std::getline(msg, l) ) {
                         try {
                             message = json::parse(l);
-                            handle_message(message, fds[i].fd);
                         } catch (const json::exception& e) {
                             DDB_IPC_WARN << "Message is not valid JSON: " << e.what() << std::endl;
                             send_response( json {
@@ -253,7 +252,9 @@ void* listen(void* sockname){
                                     {"response", std::string("Message is not valid JSON: ") + e.what()}
                                     },
                                     fds[i].fd);
+                            continue;
                         }
+                        handle_message(message, fds[i].fd);
                     }
                 } while (1);
                 if(should_close_conn) {
