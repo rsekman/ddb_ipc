@@ -46,8 +46,6 @@ json command_next(int id, json args) {
     return ok_response(id);
 }
 
-// TODO refactor checking for arguments and types ...
-
 void validate_arguments(arg_schema schema, json args) {
     arg_t arg;
     std::string arg_name;
@@ -170,14 +168,6 @@ json command_get_currently_playing(int id, json args) {
     // TODO implement
     // if arg format present, return using that format
     // otherwise return using default format
-    return error_response(id, std::string("Not implemented"));
-}
-
-json command_get_current_cover_art(int id, json args) {
-    // TODO implement
-    // return the cover as a base64-encoded string
-    // on the ur side, decode and save to a temp file
-    // may have to think about buffers?
     return error_response(id, std::string("Not implemented"));
 }
 
