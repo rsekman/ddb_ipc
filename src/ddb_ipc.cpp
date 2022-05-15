@@ -162,14 +162,63 @@ void handle_message(json message, int socket){
     send_response(response, socket);
 }
 
+int read_messages(int fd) {
+    // return value: 0 if no errors occured and the connection should be kept open
+    // -1 otherwise
+    int should_close_conn = 0;
+    char buf[DDB_IPC_MAX_MESSAGE_LENGTH];
+    int rc;
+    json message;
+    do {
+        // zero out the buffer
+        memset(buf, '\0', DDB_IPC_MAX_MESSAGE_LENGTH);
+        rc = recv(fd, buf, DDB_IPC_MAX_MESSAGE_LENGTH, 0);
+        if( rc < 0) {
+            if( errno != EWOULDBLOCK ){
+                should_close_conn = -1;
+            }
+            break;
+        } else if (rc == 0) {
+            should_close_conn = -1;
+            break;
+        }
+        DDB_IPC_DEBUG << "Received message on descriptor " << fd << ": "  << buf;
+        std::istringstream msg(buf);
+        std::string l;
+        while ( std::getline(msg, l) ) {
+            try {
+                message = json::parse(l);
+            } catch (const json::exception& e) {
+                DDB_IPC_WARN << "Message is not valid JSON: " << e.what() << std::endl;
+                send_response( json {
+                        {"status", DDB_IPC_RESPONSE_ERR},
+                        {"response", std::string("Message is not valid JSON: ") + e.what()}
+                        },
+                        fd);
+                continue;
+            }
+            handle_message(message, fd);
+        }
+    } while (1);
+    return should_close_conn;
+}
+
+int accept_connection(int new_conn, pollfd_t* fds, int n_fds) {
+    // try to find an open slot, return 0 if success, -1 otherwise
+    for(int i=1; i<= n_fds; i++){
+        if(fds[i].fd < 0){
+            fds[i].fd = new_conn;
+            DDB_IPC_DEBUG << "Accepted new connection with descriptor " << new_conn << std::endl;
+            return 0;
+        }
+    }
+    return -1;
+}
 
 void* listen(void* sockname){
     int i;
     int rc;
-    int new_conn, conn_accepted;
-    int should_close_conn;
-    char buf[DDB_IPC_MAX_MESSAGE_LENGTH];
-    buf[0] = '\0';
+    int new_conn;
     json message;
 
     pollfd_t open_slot = {
@@ -198,22 +247,9 @@ void* listen(void* sockname){
             // TODO refactor this into its own function
             // there are incoming connections
             while( (new_conn = accept4(fds[0].fd, NULL, NULL, SOCK_NONBLOCK)) >= 0) {
-                conn_accepted = 0;
-                // find an open slot
-                for(i=1; i<= DDB_IPC_MAX_CONNECTIONS; i++){
-                    if(fds[i].fd < 0){
-                        fds[i].fd = new_conn;
-                        DDB_IPC_DEBUG << "Accepted new connection with descriptor " << new_conn << std::endl;
-                        conn_accepted = 1;
-                        break;
-                    }
-                }
-                if(!conn_accepted){
-                    send_response( json {
-                            {"status", DDB_IPC_RESPONSE_ERR},
-                            {"response", std::string("Maximum connections reached.")}
-                            },
-                            new_conn);
+                if(accept_connection(new_conn, fds, DDB_IPC_MAX_CONNECTIONS) < 0){
+                    json resp = error_response(0, "Maximum connections reached.");
+                    send_response(resp, new_conn);
                     ::close(new_conn);
                 }
             }
@@ -222,42 +258,8 @@ void* listen(void* sockname){
             }
         }
         for(i=1; i<= DDB_IPC_MAX_CONNECTIONS; i++){
-            should_close_conn = 0;
-            // TODO refactor this into its own function
             if( fds[i].revents & POLLIN ) {
-                do {
-                    DDB_IPC_DEBUG << "There is data to read on descriptor " << fds[i].fd << std::endl;
-                    // zero out the buffer
-                    memset(buf, '\0', DDB_IPC_MAX_MESSAGE_LENGTH);
-                    rc = recv(fds[i].fd, buf, DDB_IPC_MAX_MESSAGE_LENGTH, 0);
-                    if( rc < 0) {
-                        if( errno != EWOULDBLOCK ){
-                            should_close_conn = 1;
-                        }
-                        break;
-                    } else if (rc == 0) {
-                        should_close_conn = 1;
-                        break;
-                    }
-                    DDB_IPC_DEBUG << "Received message on descriptor " << fds[i].fd << ": "  << buf;
-                    std::istringstream msg(buf);
-                    std::string l;
-                    while ( std::getline(msg, l) ) {
-                        try {
-                            message = json::parse(l);
-                        } catch (const json::exception& e) {
-                            DDB_IPC_WARN << "Message is not valid JSON: " << e.what() << std::endl;
-                            send_response( json {
-                                    {"status", DDB_IPC_RESPONSE_ERR},
-                                    {"response", std::string("Message is not valid JSON: ") + e.what()}
-                                    },
-                                    fds[i].fd);
-                            continue;
-                        }
-                        handle_message(message, fds[i].fd);
-                    }
-                } while (1);
-                if(should_close_conn) {
+                if (read_messages(fds[i].fd) < 0) {
                     close_connection(fds[i].fd);
                 }
             }
