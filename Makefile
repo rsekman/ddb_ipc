@@ -4,6 +4,10 @@ CXX?=g++
 CFLAGS+=-Wall -g -O2 -fPIC -D_GNU_SOURCE --std=c++17
 LDFLAGS+=-shared
 
+ifneq ($(DDB_IPC_LOGLEVEL),)
+	CFLAGS+=-DDDB_IPC_LOGLEVEL=$(DDB_IPC_LOGLEVEL)
+endif
+
 export CXX CFLAGS
 
 BUILDDIR=build

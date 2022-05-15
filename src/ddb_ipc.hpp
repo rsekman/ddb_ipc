@@ -32,11 +32,13 @@
 #define DDB_IPC_LOG_WARN  2
 #define DDB_IPC_LOG_DEBUG 3
 
+#ifndef DDB_IPC_LOGLEVEL
 #define DDB_IPC_LOGLEVEL DDB_IPC_LOG_DEBUG
+#endif
 
 #define DDB_IPC_ERR \
     if (DDB_IPC_LOGLEVEL < DDB_IPC_LOG_ERR) {} \
-    else std::cerr << "[ddb_ipc_err] "
+    else std::cerr << "[ddb_ipc] [error] "
 #define DDB_IPC_WARN \
     if (DDB_IPC_LOGLEVEL < DDB_IPC_LOG_WARN) {} \
     else std::cerr << "[ddb_ipc] [warn] "
