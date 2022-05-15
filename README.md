@@ -106,7 +106,7 @@ Additional range restrictions may apply.
 - `set-volume volume::float` set the volume in percent.
     `volume` must be from `[0, 100]`.
 - `adjust-volume adjustment::float` adjust the volume by `adjustment` percent.
-    `adjustment` must be from [-100, 100]`.
+    `adjustment` must be from `[-100, 100]`.
     DeaDBeeF clamps the adjusted volume to `[0, 100]`.
 - `toggle-mute` toggle mute
 - `seek percent::float? seconds::float?` seek to `percent` percent or `seconds` seconds.
