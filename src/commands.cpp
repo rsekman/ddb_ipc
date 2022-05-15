@@ -161,7 +161,47 @@ json command_get_playpos(int id, json args) {
 }
 json command_seek(int id, json args) {
     // TODO implement seeking
-    return error_response(id, std::string("Not implemented"));
+    arg_schema as = {
+        {"percent", {false, ARG_NUMBER}},
+        {"seconds", {false, ARG_NUMBER}}
+    };
+    try {
+        validate_arguments(as, args);
+        if(args.contains("percent") == args.contains("seconds")) {
+            throw std::invalid_argument("Exactly one of the percent and seconds arguments must be specified.");
+        }
+    } catch (std::invalid_argument& e) {
+        return bad_request_response(id, e.what());
+    }
+    DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
+    json resp;
+    if(!cur) {
+        return error_response(id, "Not playing.");
+    }
+    float dur = ddb_api->pl_get_item_duration(cur);
+    uint32_t pos;
+    if(args.contains("percent")) {
+        if(args["percent"] < 0 || args["percent"] > 1){
+            resp = bad_request_response(id, "Argument percent must be from [0, 1].");
+        } else {
+            pos = dur * 1000 * (float) args["percent"]; // milliseconds
+            ddb_api->sendmessage(DB_EV_SEEK, 0, pos, 0);
+            resp = ok_response(id);
+        }
+    }
+    if(args.contains("seconds")) {
+        if(args["seconds"] < 0){
+            resp = bad_request_response(id, "Argument seconds must be non-negative.");
+        } else if (args["seconds"] > dur) {
+            resp = error_response(id, "Attempt to seek beyond end.");
+        } else {
+            pos = 1000 * (float) args["seconds"]; // milliseconds
+            ddb_api->sendmessage(DB_EV_SEEK, 0, pos, 0);
+            resp = ok_response(id);
+        }
+    }
+    ddb_api->pl_item_unref(cur);
+    return resp;
 }
 
 json command_get_currently_playing(int id, json args) {
