@@ -46,6 +46,14 @@ json command_next(int id, json args) {
     return ok_response(id);
 }
 
+json command_prev_album(int id, json args) {
+    return error_response(id, std::string("Not implemented"));
+}
+
+json command_next_album(int id, json args) {
+    return error_response(id, std::string("Not implemented"));
+}
+
 void validate_arguments(arg_schema schema, json args) {
     arg_t arg;
     std::string arg_name;
@@ -297,6 +305,11 @@ std::map<std::string, ipc_command> commands = {
     {"play", command_play},
     {"pause", command_pause},
     {"play-pause", command_play_pause},
+    {"prev-track", command_prev},
+    {"next-track", command_next},
+    {"prev-album", command_prev_album},
+    {"next-album", command_next_album},
+    {"stop", command_stop},
     {"stop", command_stop},
     {"set-volume", command_set_volume},
     {"adjust-volume", command_adjust_volume},
