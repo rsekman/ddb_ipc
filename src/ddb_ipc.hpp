@@ -50,6 +50,8 @@
 #define DDB_IPC_RESPONSE_ERR    "ERROR"
 #define DDB_IPC_RESPONSE_BADQ   "BAD REQUEST"
 
+#define DDB_IPC_DEFAULT_FORMAT   "%artist% - %title%"
+
 #include <string>
 
 #include <sys/socket.h>

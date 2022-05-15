@@ -212,11 +212,47 @@ json command_seek(int id, json args) {
     return resp;
 }
 
-json command_get_currently_playing(int id, json args) {
+json command_get_now_playing(int id, json args) {
     // TODO implement
     // if arg format present, return using that format
     // otherwise return using default format
-    return error_response(id, std::string("Not implemented"));
+    arg_schema as = {
+        {"format", {false, ARG_STRING}}
+    };
+    try {
+        validate_arguments(as, args);
+    } catch (std::invalid_argument &e) {
+        return bad_request_response(id, e.what());
+    }
+    DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
+    json resp;
+    if(!cur) {
+        return error_response(id, "Not playing.");
+    }
+    ddb_tf_context_t ctx = {
+        ._size = sizeof(ddb_tf_context_t),
+        .flags = 0,
+        .it = cur,
+        .plt = NULL,
+        .idx = 0,
+        .id = 0,
+        .iter = PL_MAIN,
+    };
+    char buf[4096];
+    memset(buf, '\0', sizeof(buf));
+    // has to be declared here to stay in scope
+    std::string fmt_str(DDB_IPC_DEFAULT_FORMAT);
+    if (args.contains("format")) {
+        fmt_str = args["format"];
+    }
+    const char* fmt = fmt_str.c_str();
+    char* code = ddb_api->tf_compile(fmt);
+    ddb_api->tf_eval(&ctx, code, buf, 4096);
+    ddb_api->tf_free(code);
+    ddb_api->pl_item_unref(cur);
+    resp = ok_response(id);
+    resp["now-playing"] = std::string(buf);
+    return resp;
 }
 
 json command_toggle_stop_after_current_track(int id, json args) {
@@ -316,6 +352,7 @@ std::map<std::string, ipc_command> commands = {
     {"toggle-mute", command_toggle_mute},
     {"seek", command_seek},
     {"get-playpos", command_get_playpos},
+    {"get-now-playing", command_get_now_playing},
     {"toggle-stop-after-current-track", command_toggle_stop_after_current_track},
     {"toggle-stop-after-current-album", command_toggle_stop_after_current_album},
     {"request-cover-art", command_request_cover_art},
