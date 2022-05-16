@@ -3,6 +3,7 @@
 #include <sstream>
 #include <fstream>
 #include <stdexcept>
+#include <vector>
 
 #include <limits.h>
 #include <nlohmann/json.hpp>
@@ -85,6 +86,11 @@ void validate_arguments(arg_schema schema, json args) {
                         type_name = "a string";
                     }
                     break;
+                case ARG_ARRAY:
+                    if (!args[arg_name].is_array()) {
+                        invalid_type = true;
+                        type_name = "an array";
+                    }
             }
             if (invalid_type) {
                 error << "Argument " << arg_name << " must be " << type_name;
@@ -289,6 +295,7 @@ auto dist = std::uniform_int_distribution<long>(LONG_MIN, LONG_MAX);
 typedef struct {
     int socket;
     int id;
+    json accepted;
 } response_addr_t;
 
 void callback_cover_art_found (int error, ddb_cover_query_t *query, ddb_cover_info_t *cover) {
@@ -303,7 +310,7 @@ void callback_cover_art_found (int error, ddb_cover_query_t *query, ddb_cover_in
         cover->image_filename == NULL
     ) {
         response["status"] = DDB_IPC_RESPONSE_ERR;
-        response["message"] = "No cover art found";
+        response["response"] = "No cover art found";
     } else {
         response["cover-art-filename"] = cover->image_filename;
 
@@ -316,6 +323,36 @@ void callback_cover_art_found (int error, ddb_cover_query_t *query, ddb_cover_in
 
 ddb_cover_query_t* cover_query = NULL;
 json command_request_cover_art(int id, json args) {
+    arg_schema as = {
+        {"accept", {false, ARG_ARRAY}}
+    };
+    try {
+        validate_arguments(as, args);
+    } catch (std::invalid_argument &e) {
+        return bad_request_response(id, e.what());
+    }
+    if (!args.contains("accept")) {
+        args["accept"] = json::array({"filename"});
+    }
+    auto accepted = std::vector<std::string>( {
+            "filename",
+            "blob",
+            } );
+    bool any_accepted = false;
+    for(auto a = accepted.begin(); a != accepted.end(); a++){
+        if (std::find(args["accepted"].begin(), args["accepted"].end(), *a) != args["accepted"].end()){
+            any_accepted = true;
+            break;
+        }
+    }
+    if (!any_accepted) {
+        std::string err_msg("Argument must include at least one of the values: ");
+        for(auto a = accepted.begin(); a != accepted.end(); a++){
+            err_msg.append(" ");
+            err_msg.append(*a);
+        }
+        return error_response(id, err_msg);
+    }
     DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
     if (!cur) {
         return error_response(id, "Not playing");
@@ -332,6 +369,7 @@ json command_request_cover_art(int id, json args) {
     response_addr_t addr = {
         .socket = args["socket"],
         .id = id,
+        .accepted = args["accepted"],
     };
     *(response_addr_t*) cover_query->user_data = addr;
     ddb_artwork->cover_get(cover_query, callback_cover_art_found);

@@ -14,6 +14,7 @@ enum arg_type {
     ARG_NUMBER,
     ARG_INT,
     ARG_STRING,
+    ARG_ARRAY
 };
 typedef struct arg_s {
     bool mandatory;
