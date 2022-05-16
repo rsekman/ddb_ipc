@@ -9,6 +9,7 @@
 #define DDB_IPC_PROJECT_URL "https://github.com/rsekman/ddb-ipc"
 #define DDB_IPC_DEFAULT_SOCKET "/tmp/ddb_socket"
 #define DDB_IPC_POLL_FREQ 1000 // Socket polling frequency in ms
+#define DDB_IPC_WRITE_TIMEOUT 5000 // Timeout for sending messages
 #define DDB_IPC_MAX_MESSAGE_LENGTH 4096
 #define DDB_IPC_MAX_CONNECTIONS 15
 #define DDB_IPC_LICENSE_TEXT  \

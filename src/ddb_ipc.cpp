@@ -12,6 +12,7 @@
 
 #include <pthread.h>
 
+#include <sys/time.h>
 
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
@@ -80,22 +81,54 @@ void close_connection(int socket) {
 void send_response(json response, int socket){
     std::string response_str = response.dump() + std::string("\n");
     int resp_len = response_str.length();
-    if ( send(socket, response_str.c_str(), resp_len, MSG_NOSIGNAL) > 0 ) {
-        if (resp_len > 1024 + 20 ) {
-            DDB_IPC_DEBUG
-                << "Responded: "
-                << response_str.substr(0, 512)
-                << " [..., " << resp_len - 1024 << " characters omitted] "
-                << response_str.substr(resp_len - 512, 512)
+    const char* bytes = response_str.c_str();
+    int max_packet_len = DDB_IPC_MAX_MESSAGE_LENGTH;
+    int packet_len;
+    struct timeval start_time, cur_time;
+    int timeout_ms = DDB_IPC_WRITE_TIMEOUT;
+    int waited_ms;
+    pollfd_t pfd = {
+        .fd = socket,
+        .events = POLLOUT,
+        .revents = 0
+    };
+    gettimeofday(&start_time, NULL);
+    for( int i = 0; i < resp_len; i += max_packet_len) {
+        packet_len = i + 4096 > resp_len ? resp_len - i : max_packet_len;
+        // wait for the socket to become available for writing
+        do {
+            poll(&pfd, 1, timeout_ms);
+            gettimeofday(&cur_time, NULL);
+            waited_ms = (cur_time.tv_sec - start_time.tv_sec) * 1000
+                + (cur_time.tv_usec - start_time.tv_usec)/1000;
+            if (waited_ms >= timeout_ms) {
+                DDB_IPC_ERR << "Error sending response on descriptor "
+                    << socket << ": timed out after " << timeout_ms << "ms"
+                    << std::endl;
+            }
+            if (pfd.revents & POLLOUT) {
+                break;
+            }
+        } while(1);
+        if ( send(socket, bytes + i, packet_len, MSG_NOSIGNAL) <= 0 ) {
+            DDB_IPC_ERR << "Error sending response on descriptor " << socket
+                << ": errno " << errno
                 << std::endl;
-        } else {
-            DDB_IPC_DEBUG << "Responded: " << response << std::endl;
+            close_connection(socket);
+            return;
         }
-    } else{
-        DDB_IPC_ERR << "Error sending response on descriptor " << socket << ": errno " << errno << std::endl;
-        close_connection(socket);
     }
-    // TODO: error handling
+    if (resp_len > 1024 + 20 ) {
+        DDB_IPC_DEBUG
+            << "Responded: "
+            << response_str.substr(0, 512)
+            << " [..., " << resp_len - 1024 << " characters omitted] "
+            << response_str.substr(resp_len - 512, 512)
+            << "in " << waited_ms << " ms."
+            << std::endl;
+    } else {
+        DDB_IPC_DEBUG << "Responded: " << response << std::endl;
+    }
 }
 
 // Send a message to all connected clients
