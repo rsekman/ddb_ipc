@@ -122,11 +122,14 @@ Additional range restrictions may apply.
     Returns an error if not currently playing.
 - `toggle-stop-after-current-track` toggle the stop after current track flag
 - `toggle-stop-after-current-album` toggle the stop after current album flag
-- `request-cover-art accept::[string]?=["filename"]` returns the cover art for the currently playing track.
+- `request-cover-art accept::[string]?=["filename"]` issues a request for the cover art for the currently playing track.
+    Cover art look-up is asynchronous.
+    An initial `OK` response to this command therefore only indicates a successful *request*.
+    When the request returns, a second message with the same `request_id` will be sent asynchronously, containing the cover art data itself.
+    If no cover art was found, the second response will be an error.
     If present, `accept` must contain at least one of `"filename"` and `"blob"`.
-    If `accept` contains `"filename"`, the response will contain the key `filename` with an absolute path to the cover art.
+    If `accept` contains `"filename"`, the response will contain the key `filename` with an absolute path to the (cached) cover art.
     If `accept` contains `"blob`", the response will the contain the key `blob` with a base64-encoding of the cover art.
-    Returns an error if not currently playing or no cover art is found.
 - `get_property`, `set_property`, `observe_property` these commands are documented in the next section
 
 ### Properties
