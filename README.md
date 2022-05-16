@@ -94,7 +94,7 @@ Example valid commands are as follows:
 ```
 
 Available commands and their call signatures are listed below.
-Arguments are specified as `name::type``, followed by a `?` if the argument is optional.
+Arguments are specified as `name::type`, followed by a `?` if the argument is optional, and `=default` if there is a default value..
 Additional range restrictions may apply.
 
 - `play` start the player
