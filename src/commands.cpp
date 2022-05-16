@@ -168,7 +168,6 @@ json command_get_playpos(int id, json args) {
     return resp;
 }
 json command_seek(int id, json args) {
-    // TODO implement seeking
     arg_schema as = {
         {"percent", {false, ARG_NUMBER}},
         {"seconds", {false, ARG_NUMBER}}
@@ -189,10 +188,10 @@ json command_seek(int id, json args) {
     float dur = ddb_api->pl_get_item_duration(cur);
     uint32_t pos;
     if(args.contains("percent")) {
-        if(args["percent"] < 0 || args["percent"] > 1){
-            resp = bad_request_response(id, "Argument percent must be from [0, 1].");
+        if(args["percent"] < 0 || args["percent"] > 100){
+            resp = bad_request_response(id, "Argument percent must be from [0, 100].");
         } else {
-            pos = dur * 1000 * (float) args["percent"]; // milliseconds
+            pos = dur * 1000 * (float) args["percent"]/100; // milliseconds
             ddb_api->sendmessage(DB_EV_SEEK, 0, pos, 0);
             resp = ok_response(id);
         }
@@ -349,7 +348,6 @@ std::map<std::string, ipc_command> commands = {
     {"next-track", command_next},
     {"prev-album", command_prev_album},
     {"next-album", command_next_album},
-    {"stop", command_stop},
     {"stop", command_stop},
     {"set-volume", command_set_volume},
     {"adjust-volume", command_adjust_volume},
