@@ -1,0 +1,1 @@
+{"command":"get-now-playing","args":{"format":"%artist% - '['%album% - #%tracknumber%']' %title%"},"request_id":1}
