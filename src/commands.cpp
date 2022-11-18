@@ -12,7 +12,7 @@
 #include "properties.hpp"
 #include "../submodules/cpp-base64/base64.h"
 #include <deadbeef/deadbeef.h>
-#include <deadbeef/plugins/artwork/artwork.h>
+#include <deadbeef/artwork.h>
 
 using json = nlohmann::json;
 namespace ddb_ipc {

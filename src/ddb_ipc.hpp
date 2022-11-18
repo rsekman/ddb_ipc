@@ -62,7 +62,7 @@
 #include <linux/limits.h>
 
 #include <deadbeef/deadbeef.h>
-#include <deadbeef/plugins/artwork/artwork.h>
+#include <deadbeef/artwork.h>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
