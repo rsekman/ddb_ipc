@@ -58,5 +58,5 @@ $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
 clean:
-	rm -rf $(BUILDDIR)
+	rm $(BUILDDIR)/*.so $(BUILDDIR)/*.lo
 	rm -f $(SOCK)
