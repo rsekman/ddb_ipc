@@ -1,4 +1,7 @@
+#include <algorithm>
 #include <iostream>
+#include <nlohmann/detail/macro_scope.hpp>
+#include <optional>
 #include <random>
 #include <sstream>
 #include <fstream>
@@ -13,106 +16,59 @@
 #include "../submodules/cpp-base64/base64.h"
 #include <deadbeef/deadbeef.h>
 #include <deadbeef/artwork.h>
+#include <string>
 
 using json = nlohmann::json;
 namespace ddb_ipc {
 
-json command_play(int id, json args) {
+void from_json (const json &j, Argument &a) { };
+
+COMMAND(play, Argument)
     ddb_api->sendmessage(DB_EV_PLAY_CURRENT, 0, 0, 0);
     return ok_response(id);
 }
 
-json command_pause(int id, json args) {
+COMMAND(pause, Argument)
     ddb_api->sendmessage(DB_EV_PAUSE, 0, 0, 0);
     return ok_response(id);
 }
 
-json command_play_pause(int id, json args) {
+COMMAND(play_pause, Argument)
     ddb_api->sendmessage(DB_EV_TOGGLE_PAUSE, 0, 0, 0);
     return ok_response(id);
 }
 
-json command_stop(int id, json args) {
+COMMAND(stop, Argument)
     ddb_api->sendmessage(DB_EV_STOP, 0, 0, 0);
     return ok_response(id);
 }
 
-json command_prev(int id, json args) {
+COMMAND(prev, Argument)
     ddb_api->sendmessage(DB_EV_PREV, 0, 0, 0);
     return ok_response(id);
 }
 
-json command_next(int id, json args) {
+COMMAND(next, Argument)
     ddb_api->sendmessage(DB_EV_NEXT, 0, 0, 0);
     return ok_response(id);
 }
 
-json command_prev_album(int id, json args) {
+COMMAND(prev_album, Argument)
     return error_response(id, std::string("Not implemented"));
 }
 
-json command_next_album(int id, json args) {
+COMMAND(next_album, Argument)
     return error_response(id, std::string("Not implemented"));
 }
 
-void validate_arguments(arg_schema schema, json args) {
-    arg_t arg;
-    std::string arg_name;
-    std::ostringstream  error;
-    bool invalid_type = false;
-    std::string type_name;
-    for (auto i = schema.begin(); i != schema.end(); i++) {
-        arg_name = i->first;
-        arg = i->second;
-        if ( args.contains(arg_name)) {
-            switch ( arg.type ) {
-                case ARG_POLYMORPHIC:
-                    break;
-                case ARG_NUMBER:
-                    if (!args[arg_name].is_number() ){
-                        invalid_type = true;
-                        type_name = "a number";
-                    }
-                    break;
-                case ARG_INT:
-                    if (!args[arg_name].is_number_integer() ){
-                        invalid_type = true;
-                        type_name = "an integer";
-                    }
-                    break;
-                case ARG_STRING:
-                    if (!args[arg_name].is_string() ){
-                        invalid_type = true;
-                        type_name = "a string";
-                    }
-                    break;
-                case ARG_ARRAY:
-                    if (!args[arg_name].is_array()) {
-                        invalid_type = true;
-                        type_name = "an array";
-                    }
-            }
-            if (invalid_type) {
-                error << "Argument " << arg_name << " must be " << type_name;
-                throw std::invalid_argument(error.str());
-            }
-        } else if(arg.mandatory) {
-            error << "Argument " << i->first << " is mandatory";
-            throw std::invalid_argument(error.str());
-        }
-    }
-}
+class SetVolumeArgument : Argument {
+    public:
+        float volume;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SetVolumeArgument, volume);
 
-json command_set_volume(int id, json args) {
-    arg_schema as = {
-        {"volume", {true, ARG_NUMBER}}
-    };
-    try {
-        validate_arguments(as, args);
-    } catch (std::invalid_argument& e) {
-        return bad_request_response(id, e.what());
-    }
-    float vol = args["volume"];
+COMMAND(set_volume, SetVolumeArgument)
+    float vol = args.volume;
     float mindb = ddb_api->volume_get_min_db();
     if(vol > 100 || vol < 0) {
         return bad_request_response(id, std::string("Argument volume must be from [0, 100]"));
@@ -121,16 +77,14 @@ json command_set_volume(int id, json args) {
     return ok_response(id);
 }
 
-json command_adjust_volume(int id, json args) {
-    arg_schema as = {
-        {"adjustment", {true, ARG_NUMBER}}
-    };
-    try {
-        validate_arguments(as, args);
-    } catch (std::invalid_argument& e) {
-        return bad_request_response(id, e.what());
-    }
-    float adj = ((float) args["adjustment"])/100;
+class AdjustVolumeArgument : Argument {
+    public:
+        float adjustment;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AdjustVolumeArgument, adjustment);
+
+COMMAND(adjust_volume, AdjustVolumeArgument)
+    float adj = args.adjustment/100;
     if(adj > 1 || adj < -1) {
         return bad_request_response(id, std::string("Argument adjustment must be from [-1, 1]"));
     }
@@ -140,7 +94,7 @@ json command_adjust_volume(int id, json args) {
     return ok_response(id);
 }
 
-json command_toggle_mute(int id, json args) {
+COMMAND(toggle_mute, Argument)
     DDB_IPC_DEBUG << "Toggling mute." << std::endl;
     int m = ddb_api->audio_is_mute();
     if(m) {
@@ -152,7 +106,7 @@ json command_toggle_mute(int id, json args) {
     return ok_response(id);
 }
 
-json command_get_playpos(int id, json args) {
+COMMAND(get_playpos, Argument)
     DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
     if(!cur) {
         return error_response(id, "Not playing.");
@@ -173,19 +127,31 @@ json command_get_playpos(int id, json args) {
     ddb_api->pl_item_unref(cur);
     return resp;
 }
-json command_seek(int id, json args) {
-    arg_schema as = {
-        {"percent", {false, ARG_NUMBER}},
-        {"seconds", {false, ARG_NUMBER}}
-    };
-    try {
-        validate_arguments(as, args);
-        if(args.contains("percent") == args.contains("seconds")) {
-            throw std::invalid_argument("Exactly one of the percent and seconds arguments must be specified.");
-        }
-    } catch (std::invalid_argument& e) {
-        return bad_request_response(id, e.what());
+
+class SeekArgument : Argument {
+    public:
+        std::optional<float> percent = {};
+        std::optional<float> seconds = {};
+};
+void from_json(const json& j, SeekArgument& a){
+    SeekArgument def;
+    a.percent = j.contains("percent") ? j.at("percent") : def.percent;
+    a.seconds = j.contains("seconds") ? j.at("seconds") : def.seconds;
+    if((bool) a.percent == (bool) a.seconds) {
+        throw std::invalid_argument("Exactly one of the percent and seconds arguments must be specified.");
     }
+    if (a.percent) {
+        float f = a.percent.value();
+        if(f < 0 || f > 100) {
+            throw std::invalid_argument("Argument percent must be from [0, 100].");
+        }
+    }
+    if (a.seconds && a.seconds.value() < 0) {
+        throw std::invalid_argument("Argument percent must be from [0, 100].");
+    }
+}
+
+COMMAND(seek, SeekArgument)
     DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
     json resp;
     if(!cur) {
@@ -193,22 +159,16 @@ json command_seek(int id, json args) {
     }
     float dur = ddb_api->pl_get_item_duration(cur);
     uint32_t pos;
-    if(args.contains("percent")) {
-        if(args["percent"] < 0 || args["percent"] > 100){
-            resp = bad_request_response(id, "Argument percent must be from [0, 100].");
-        } else {
-            pos = dur * 1000 * (float) args["percent"]/100; // milliseconds
-            ddb_api->sendmessage(DB_EV_SEEK, 0, pos, 0);
-            resp = ok_response(id);
-        }
+    if(args.percent) {
+        pos = dur * 1000 *  args.percent.value()/100; // milliseconds
+        ddb_api->sendmessage(DB_EV_SEEK, 0, pos, 0);
+        resp = ok_response(id);
     }
-    if(args.contains("seconds")) {
-        if(args["seconds"] < 0){
-            resp = bad_request_response(id, "Argument seconds must be non-negative.");
-        } else if (args["seconds"] > dur) {
+    if(args.seconds) {
+        if (args.seconds > dur) {
             resp = error_response(id, "Attempt to seek beyond end.");
         } else {
-            pos = 1000 * (float) args["seconds"]; // milliseconds
+            pos = 1000 * args.seconds.value(); // milliseconds
             ddb_api->sendmessage(DB_EV_SEEK, 0, pos, 0);
             resp = ok_response(id);
         }
@@ -217,18 +177,13 @@ json command_seek(int id, json args) {
     return resp;
 }
 
-json command_get_now_playing(int id, json args) {
-    // TODO implement
-    // if arg format present, return using that format
-    // otherwise return using default format
-    arg_schema as = {
-        {"format", {false, ARG_STRING}}
-    };
-    try {
-        validate_arguments(as, args);
-    } catch (std::invalid_argument &e) {
-        return bad_request_response(id, e.what());
-    }
+class GetNowPlayingArgument : Argument {
+    public:
+        std::string format = DDB_IPC_DEFAULT_FORMAT;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(GetNowPlayingArgument, format);
+
+COMMAND(get_now_playing, GetNowPlayingArgument)
     DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
     json resp;
     if(!cur) {
@@ -245,12 +200,8 @@ json command_get_now_playing(int id, json args) {
     };
     char buf[4096];
     memset(buf, '\0', sizeof(buf));
-    // has to be declared here to stay in scope
-    std::string fmt_str(DDB_IPC_DEFAULT_FORMAT);
-    if (args.contains("format")) {
-        fmt_str = args["format"];
-    }
-    const char* fmt = fmt_str.c_str();
+    //std::string fmt_str = args.format;
+    const char* fmt = args.format.c_str();
     char* code = ddb_api->tf_compile(fmt);
     if (code == NULL) {
         resp = error_response(id, "Compilation of title format failed.");
@@ -264,7 +215,7 @@ json command_get_now_playing(int id, json args) {
     return resp;
 }
 
-json command_toggle_stop_after_current_track(int id, json args) {
+COMMAND(toggle_stop_after_current_track, Argument)
     int stop = ddb_api->conf_get_int("playlist.stop_after_current", 0);
     DDB_IPC_DEBUG << "Toggling stop after current track from " << stop << std::endl;
     if (stop) {
@@ -276,7 +227,7 @@ json command_toggle_stop_after_current_track(int id, json args) {
     return ok_response(id);
 }
 
-json command_toggle_stop_after_current_album(int id, json args) {
+COMMAND(toggle_stop_after_current_album, Argument)
     DDB_IPC_DEBUG << "Toggling stop after current album." << std::endl;
     int stop = ddb_api->conf_get_int("playlist.stop_after_album", 0);
     if (stop) {
@@ -292,7 +243,8 @@ std::random_device rd;
 std::mt19937 mersenne_twister(rd());
 auto dist = std::uniform_int_distribution<long>(LONG_MIN, LONG_MAX);
 
-std::set<std::string> cover_art_formats = {
+typedef std::set<std::string> accept_t;
+accept_t cover_art_formats = {
     "filename",
     "blob",
 };
@@ -300,7 +252,7 @@ std::set<std::string> cover_art_formats = {
 typedef struct {
     int socket;
     int id;
-    std::set<std::string>* accepted;
+    accept_t *accept;
 } response_addr_t;
 
 void callback_cover_art_found (int error, ddb_cover_query_t *query, ddb_cover_info_t *cover) {
@@ -315,11 +267,11 @@ void callback_cover_art_found (int error, ddb_cover_query_t *query, ddb_cover_in
         resp = error_response(addr->id, "No cover art found");
     } else {
         resp = ok_response(addr->id);
-        if (addr->accepted->count("filename") > 0) {
+        if (addr->accept->count("filename") > 0) {
             DDB_IPC_DEBUG << "Responding with filename." << std::endl;
             resp["filename"] = cover->image_filename;
         }
-        if (addr->accepted->count("blob") > 0) {
+        if (addr->accept->count("blob") > 0) {
             DDB_IPC_DEBUG << "Responding with blob." << std::endl;
             std::ifstream cover_file(
                     cover->image_filename,
@@ -340,52 +292,42 @@ void callback_cover_art_found (int error, ddb_cover_query_t *query, ddb_cover_in
     }
     send_response(resp, addr->socket);
     ddb_api->pl_item_unref(query->track);
-    free(addr->accepted);
+    free(addr->accept);
     free(query->user_data);
     free(query);
 }
 
 ddb_cover_query_t* cover_query = NULL;
-json command_request_cover_art(int id, json args) {
-    arg_schema as = {
-        {"accept", {false, ARG_ARRAY}}
-    };
-    try {
-        validate_arguments(as, args);
-    } catch (std::invalid_argument &e) {
-        return bad_request_response(id, e.what());
+class RequestCoverArtArgument : Argument {
+    public:
+        accept_t accept = {"filename"};
+        int socket;
+};
+void from_json(const json &j, RequestCoverArtArgument &a) {
+    a.socket = j.at("socket");
+    if (!j.contains("accept")) {
+        return;
     }
-    DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
-    if (!cur) {
-        return error_response(id, "Not playing");
-    }
-    std::set<std::string>* accepted;
-    accepted = new std::set<std::string>();
-    if (!args.contains("accept")) {
-        DDB_IPC_DEBUG << "Accepting filename" << std::endl;
-        accepted->insert("filename");
-        DDB_IPC_DEBUG << "Accepting filename" << std::endl;
-    } else {
-        DDB_IPC_DEBUG << "Checking for what to accept." << std::endl;
-        for(auto a = args["accept"].begin(); a != args["accept"].end(); a++){
-            DDB_IPC_DEBUG << "Accepting " << *a << "?" << std::endl;
-            if (!a->is_string()) {
-                DDB_IPC_DEBUG << "Not a string: " << *a << std::endl;
-                continue;
-            }
-            if (cover_art_formats.count((std::string) *a) > 0) {
-                accepted->insert((std::string) *a);
-            }
+    a.accept.clear();
+    std::vector<std::string> accept_arg = j.at("accept");
+    for (auto c : accept_arg ) {
+        if (cover_art_formats.find(c) != cover_art_formats.end()) {
+            a.accept.insert(c);
         }
     }
-    DDB_IPC_DEBUG << "Accepting formats." << std::endl;
-    if (accepted->empty()) {
-        std::string err_msg("Argument must include at least one of the values:");
+    if (a.accept.empty()) {
+        std::string err_msg("Argument accept must include at least one of the values:");
         for(auto a = cover_art_formats.begin(); a != cover_art_formats.end(); a++){
             err_msg.append(" ");
             err_msg.append(*a);
         }
-        return error_response(id, err_msg);
+        throw std::invalid_argument(err_msg);
+    }
+}
+COMMAND(request_cover_art, RequestCoverArtArgument)
+    DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
+    if (!cur) {
+        return error_response(id, "Not playing");
     }
     ddb_api->pl_item_ref(cur);
     int64_t sid = dist(mersenne_twister);
@@ -397,9 +339,9 @@ json command_request_cover_art(int id, json args) {
     cover_query->user_data = malloc(sizeof(response_addr_t));
     cover_query->_size = sizeof(ddb_cover_query_t);
     response_addr_t addr = {
-        .socket = args["socket"],
+        .socket = args.socket,
         .id = id,
-        .accepted = accepted,
+        .accept = new accept_t(args.accept),
     };
     *(response_addr_t*) cover_query->user_data = addr;
     ddb_artwork->cover_get(cover_query, callback_cover_art_found);
@@ -430,5 +372,36 @@ std::map<std::string, ipc_command> commands = {
     {"set-property", command_set_property},
     {"observe-property", command_observe_property}
 };
+
+std::string prettify_json_exception(std::string prefix, json::exception &e) {
+    std::string w = e.what();
+    auto idx = w.find("] ");
+    if (idx != -1) {
+        w = w.substr(idx+1);
+    }
+    return prefix + ": " + w;
+}
+
+json call_command(std::string command, int id, json args) {
+    json response;
+    try {
+        response = commands.at(command)(id, args);
+    } catch (std::out_of_range& e) {
+        response = error_response(id, std::string("Unknown command ") + command);
+    } catch (json::out_of_range &e) {
+        response = bad_request_response(id,
+           prettify_json_exception("Missing argument", e)
+        );
+    } catch (json::type_error &e) {
+        response = bad_request_response(id,
+           prettify_json_exception("Type error", e)
+        );
+    } catch (json::exception &e) {
+        response = bad_request_response(id, e.what());
+    } catch (std::invalid_argument &e) {
+        response = bad_request_response(id, e.what());
+    }
+    return response;
+}
 
 }

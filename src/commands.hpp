@@ -6,37 +6,21 @@ using json = nlohmann::json;
 
 #include <deadbeef/deadbeef.h>
 
+#define COMMAND(n, argt) \
+    json command_ ## n(int id, argt &args); \
+    json command_ ## n (int id, json args) { \
+        argt a = args; \
+        return command_ ## n(id, a); \
+    } \
+    json command_ ## n(int id, argt &args) {
+
 namespace ddb_ipc {
 
+class Argument { };
+
 typedef json (*ipc_command)(int, json);
-enum arg_type {
-    ARG_POLYMORPHIC,
-    ARG_NUMBER,
-    ARG_INT,
-    ARG_STRING,
-    ARG_ARRAY
-};
-typedef struct arg_s {
-    bool mandatory;
-    arg_type type;
-} arg_t;
-typedef std::map<std::string, arg_t> arg_schema;
 
-extern std::map<std::string, ipc_command> commands;
-
-void validate_arguments(arg_schema schema, json args);
-
-json command_play(int id, json args);
-json command_pause(int id, json args);
-json command_play_pause(int id, json args);
-json command_stop(int id, json args);
-json command_prev(int id, json args);
-json command_next(int id, json args);
-json command_set_volume(int id, json args);
-json command_adjust_volume(int id, json args);
-json command_toggle_mute(int id, json args);
-json command_get_playpos(int id, json args);
-json command_seek(int id, json args);
+json call_command(std::string command, int id, json args);
 
 }
 

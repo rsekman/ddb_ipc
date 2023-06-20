@@ -188,7 +188,7 @@ void handle_message(json message, int socket){
     }
     message["args"]["socket"] = socket;
     try {
-        response = commands.at(message["command"])(id, message["args"]);
+        response = call_command(message["command"], id, message["args"]);
     } catch (std::out_of_range& e) {
         response = error_response(id, std::string("Unknown command"));
     }
