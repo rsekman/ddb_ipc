@@ -1,0 +1,4 @@
+{"command":"set-volume","args":{"volume": 70},"request_id":1}
+{"command":"set-volume","args":{"volume": 150},"request_id":2}
+{"command":"set-volume","args":{"volume": -10},"request_id":3}
+{"command":"set-volume","args":{"volume": "loud"},"request_id":4}

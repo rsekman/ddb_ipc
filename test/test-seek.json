@@ -1,0 +1,4 @@
+{"command":"seek","args":{"percent": 30, "seconds": 1},"request_id":1}
+{"command":"seek","args":{},"request_id":2}
+{"command":"seek","args":{"percent": 0},"request_id":3}
+{"command":"seek","args":{"percent": -10},"request_id":4}
