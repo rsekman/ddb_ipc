@@ -4,4 +4,4 @@
 echo "Request:"
 jq . $1
 echo "Response:"
-cat $1 | socat - /tmp/ddb_socket | jq .
+(cat $1; sleep 1) | socat - /tmp/ddb_socket | jq .
