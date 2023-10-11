@@ -1,11 +1,15 @@
+#include "properties.hpp"
+
+#include <deadbeef/deadbeef.h>
+
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <set>
 
-#include <nlohmann/json.hpp>
-#include "ddb_ipc.hpp"
 #include "commands.hpp"
-#include "properties.hpp"
-#include <deadbeef/deadbeef.h>
+#include "ddb_ipc.hpp"
+
+using json = nlohmann::json;
 
 using json = nlohmann::json;
 

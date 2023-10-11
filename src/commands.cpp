@@ -1,22 +1,23 @@
+#include "commands.hpp"
+
+#include <deadbeef/deadbeef.h>
+#include <deadbeef/artwork.h>
+#include <limits.h>
+
 #include <algorithm>
+#include <fstream>
 #include <iostream>
 #include <nlohmann/detail/macro_scope.hpp>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <random>
 #include <sstream>
-#include <fstream>
+#include <string>
 #include <stdexcept>
 
-#include <limits.h>
-#include <nlohmann/json.hpp>
-
-#include "ddb_ipc.hpp"
-#include "commands.hpp"
-#include "properties.hpp"
 #include "../submodules/cpp-base64/base64.h"
-#include <deadbeef/deadbeef.h>
-#include <deadbeef/artwork.h>
-#include <string>
+#include "ddb_ipc.hpp"
+#include "properties.hpp"
 
 using json = nlohmann::json;
 namespace ddb_ipc {
