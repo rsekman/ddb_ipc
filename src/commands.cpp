@@ -53,13 +53,38 @@ COMMAND(next, Argument)
     return ok_response(id);
 }
 
+#if (DDB_API_LEVEL >= 17)
+
 COMMAND(prev_album, Argument)
-    return error_response(id, std::string("Not implemented"));
+    ddb_api->sendmessage(DB_EV_PLAY_PREV_ALBUM, 0, 0, 0);
+    return ok_response(id);
 }
 
 COMMAND(next_album, Argument)
-    return error_response(id, std::string("Not implemented"));
+    ddb_api->sendmessage(DB_EV_PLAY_NEXT_ALBUM, 0, 0, 0);
+    return ok_response(id);
 }
+
+COMMAND(random_album, Argument)
+    ddb_api->sendmessage(DB_EV_PLAY_RANDOM_ALBUM, 0, 0, 0);
+    return ok_response(id);
+}
+
+#else
+
+COMMAND(prev_album, Argument)
+    return error_response(id,
+        "Command requires API level >= 17, but API level is " +  std::to_string(DDB_API_LEVEL) + "."
+    );
+}
+
+COMMAND(next_album, Argument)
+    return error_response(id,
+        "Command requires API level >= 17, but API level is " +  std::to_string(DDB_API_LEVEL) + "."
+    );
+}
+
+#endif
 
 class SetVolumeArgument : Argument {
     public:
