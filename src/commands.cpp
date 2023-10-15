@@ -39,6 +39,16 @@ COMMAND(play_pause, Argument)
     return ok_response(id);
 }
 
+class PlayNumArgument : Argument {
+    public:
+        int idx;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(PlayNumArgument, idx);
+COMMAND(play_num, PlayNumArgument)
+    ddb_api->sendmessage(DB_EV_PLAY_NUM, 0, args.idx, 0);
+    return ok_response(id);
+}
+
 COMMAND(stop, Argument)
     ddb_api->sendmessage(DB_EV_STOP, 0, 0, 0);
     return ok_response(id);
@@ -462,6 +472,7 @@ std::map<std::string, ipc_command> commands = {
     {"play", command_play},
     {"pause", command_pause},
     {"play-pause", command_play_pause},
+    {"play-num", command_play_num},
     {"prev-track", command_prev},
     {"next-track", command_next},
     {"prev-album", command_prev_album},

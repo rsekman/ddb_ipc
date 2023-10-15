@@ -100,6 +100,7 @@ Additional range restrictions may apply.
 - `play` start the player
 - `pause` pause the player
 - `play-pause` toggle play/pause
+- `play-num idx::int` play track number `idx` in the current playlist (zero-indexed)
 - `prev-track` go the previous track
 - `next-track` go the next track
 - `stop` stop playing
