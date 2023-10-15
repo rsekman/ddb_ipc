@@ -41,6 +41,7 @@ class MissingArgumentError : Exception {
 };
 class TypeError : Exception {
     public:
+        TypeError(std::string msg) : Exception(msg) {};
         TypeError(json::exception &e) {
             msg = prettify_json_exception("Type error", e);
         }

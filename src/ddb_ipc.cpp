@@ -157,9 +157,12 @@ void handle_message(json message, int socket) {
     if (!message.contains("args") ) {
         message["args"] = {};
     }
-    message["args"]["socket"] = socket;
     try {
         Message m = message;
+        if (!m.args.is_object() and !m.args.is_null()) {
+            send_response(bad_request_response(m.id, "args must be a JSON object or null."), socket);
+        }
+        m.args["socket"] = socket;
         handle_message(m, socket);
     } catch (Exception &e) {
         DDB_IPC_DEBUG << e.what() << std::endl;
