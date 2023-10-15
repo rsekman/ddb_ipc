@@ -492,7 +492,6 @@ json call_command(std::string command, request_id id, json args) {
     try {
         response = commands.at(command)(id, args);
     } catch (std::out_of_range& e) {
-        DDB_IPC_DEBUG << "Unknown command: " << e.what() << std::endl;
         response = error_response(id, std::string("Unknown command ") + command);
     } catch (json::out_of_range &e) {
         response = bad_request_response(id, e.what());
