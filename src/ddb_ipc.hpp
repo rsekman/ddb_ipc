@@ -46,10 +46,6 @@
     if (DDB_IPC_LOGLEVEL < DDB_IPC_LOG_DEBUG) {} \
     else std::cerr << "[ddb_ipc] [debug] "
 
-#define DDB_IPC_RESPONSE_OK     "OK"
-#define DDB_IPC_RESPONSE_ERR    "ERROR"
-#define DDB_IPC_RESPONSE_BADQ   "BAD REQUEST"
-
 #define DDB_IPC_DEFAULT_FORMAT   "%artist% - %title%"
 
 #include <string>
@@ -71,9 +67,6 @@ namespace ddb_ipc{
 extern DB_functions_t* ddb_api;
 extern ddb_artwork_plugin_t* ddb_artwork;
 
-json ok_response(int id);
-json bad_request_response(int id, std::string mess);
-json error_response(int id, std::string mess);
 
 void send_response(json msg, int socket);
 

@@ -18,7 +18,10 @@
 using json = nlohmann::json;
 
 #include "ddb_ipc.hpp"
+#include "argument.hpp"
 #include "commands.hpp"
+#include "response.hpp"
+#include "message.hpp"
 #include "properties.hpp"
 
 #include <deadbeef/deadbeef.h>
@@ -143,56 +146,26 @@ void broadcast(json message) {
     }
 }
 
-// Boilerplate response
-
-json ok_response(int id) {
-    json resp = json { {"status", DDB_IPC_RESPONSE_OK} };
-    if(id) {
-        resp["request_id"] = id;
-    }
-    return resp;
-};
-
-json bad_request_response(int id, std::string mess) {
-    json resp = json { {"status", DDB_IPC_RESPONSE_BADQ}, {"response", mess} };
-    if(id) {
-        resp["request_id"] = id;
-    }
-    return resp;
-}
-json error_response(int id, std::string mess) {
-    json resp = json { {"status", DDB_IPC_RESPONSE_ERR}, {"response", mess} };
-    if(id) {
-        resp["request_id"] = id;
-    }
-    return resp;
-}
-
-void handle_message(json message, int socket){
+void handle_message(Message m, int socket) {
     json response;
-    int id = 0;
-    if(message.contains("request_id") && message["request_id"].is_number_integer()){
-        id = message["request_id"];
-    }
-    if ( !message.contains("command") || message["command"].type() != json::value_t::string ) {
-        DDB_IPC_WARN << "Bad request: `command` field must be present and must be a string." << std::endl;
-        response = bad_request_response(
-            id,
-            std::string("`command` field must be present and must be a string.")
-        );
-        send_response(response, socket);
-        return;
-    }
+    response = call_command(m.command, m.id, m.args);
+    send_response(response, socket);
+}
+
+
+void handle_message(json message, int socket) {
     if (!message.contains("args") ) {
         message["args"] = {};
     }
     message["args"]["socket"] = socket;
     try {
-        response = call_command(message["command"], id, message["args"]);
-    } catch (std::out_of_range& e) {
-        response = error_response(id, std::string("Unknown command"));
+        Message m = message;
+        handle_message(m, socket);
+    } catch (Exception &e) {
+        DDB_IPC_DEBUG << e.what() << std::endl;
+    } catch (std::exception &e) {
+        DDB_IPC_DEBUG << e.what() << std::endl;
     }
-    send_response(response, socket);
 }
 
 int read_messages(int fd) {

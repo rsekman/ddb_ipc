@@ -7,6 +7,7 @@
 using json = nlohmann::json;
 
 #include <deadbeef/deadbeef.h>
+#include "commands.hpp"
 
 namespace ddb_ipc {
 
@@ -24,12 +25,12 @@ json get_property_mute();
 json get_property_shuffle();
 json get_property_repeat();
 
-json command_get_property(int id, json args);
-json command_set_property(int id, json args);
+json command_get_property(request_id id, json args);
+json command_set_property(request_id id, json args);
 
 json property_as_json(std::string prop);
 
-json command_observe_property(int id, json args);
+json command_observe_property(request_id id, json args);
 
 }
 

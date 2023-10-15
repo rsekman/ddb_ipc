@@ -17,12 +17,12 @@
 
 #include "../submodules/cpp-base64/base64.h"
 #include "ddb_ipc.hpp"
+#include "argument.hpp"
+#include "response.hpp"
 #include "properties.hpp"
 
 using json = nlohmann::json;
 namespace ddb_ipc {
-
-void from_json (const json &j, Argument &a) { };
 
 COMMAND(play, Argument)
     ddb_api->sendmessage(DB_EV_PLAY_CURRENT, 0, 0, 0);
@@ -139,16 +139,11 @@ COMMAND(get_playpos, Argument)
     }
     float dur = ddb_api->pl_get_item_duration(cur);
     float playpos = ddb_api->streamer_get_playpos();
-    json resp = ok_response(id);
-    resp.merge_patch(
-        json {
-            {"status", DDB_IPC_RESPONSE_OK},
-            {"data", {
-                {"duration", dur},
-                {"position", playpos}
-                }
-            }
-        }
+    json resp = ok_response(id,
+        {{"data", {
+            {"duration", dur},
+            {"position", playpos}
+        }}}
     );
     ddb_api->pl_item_unref(cur);
     return resp;
@@ -363,7 +358,7 @@ accept_t cover_art_formats = {
 
 typedef struct {
     int socket;
-    int id;
+    request_id id;
     accept_t *accept;
 } response_addr_t;
 
@@ -492,29 +487,17 @@ std::map<std::string, ipc_command> commands = {
     {"observe-property", command_observe_property}
 };
 
-std::string prettify_json_exception(std::string prefix, json::exception &e) {
-    std::string w = e.what();
-    auto idx = w.find("] ");
-    if (idx == std::string::npos) {
-        w = w.substr(idx+1);
-    }
-    return prefix + ": " + w;
-}
-
-json call_command(std::string command, int id, json args) {
+json call_command(std::string command, request_id id, json args) {
     json response;
     try {
         response = commands.at(command)(id, args);
     } catch (std::out_of_range& e) {
+        DDB_IPC_DEBUG << "Unknown command: " << e.what() << std::endl;
         response = error_response(id, std::string("Unknown command ") + command);
     } catch (json::out_of_range &e) {
-        response = bad_request_response(id,
-           prettify_json_exception("Missing argument", e)
-        );
+        response = bad_request_response(id, e.what());
     } catch (json::type_error &e) {
-        response = bad_request_response(id,
-           prettify_json_exception("Type error", e)
-        );
+        response = bad_request_response(id, e.what());
     } catch (json::exception &e) {
         response = bad_request_response(id, e.what());
     } catch (std::invalid_argument &e) {

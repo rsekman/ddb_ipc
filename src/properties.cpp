@@ -7,6 +7,7 @@
 #include <set>
 
 #include "commands.hpp"
+#include "response.hpp"
 #include "ddb_ipc.hpp"
 
 using json = nlohmann::json;
