@@ -368,6 +368,13 @@ void on_config_changed() {
     }
 }
 
+void on_playlist_switched() {
+    broadcast( json {
+        {"event", "playlist-switched"},
+        {"idx", ddb_api->plt_get_curr_idx()}
+    });
+}
+
 int handleMessage(uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2){
     switch(id) {
         case DB_EV_PAUSED:
@@ -384,6 +391,9 @@ int handleMessage(uint32_t id, uintptr_t ctx, uint32_t p1, uint32_t p2){
             break;
         case DB_EV_CONFIGCHANGED:
             on_config_changed();
+            break;
+        case DB_EV_PLAYLISTSWITCHED:
+            on_playlist_switched();
     }
     return 0;
 }
