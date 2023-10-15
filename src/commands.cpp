@@ -273,6 +273,60 @@ COMMAND(set_current_playlist, SetCurrPlaylistArgument)
     }
 }
 
+class GetPlaylistContentsArgument : Argument {
+    public:
+        int idx;
+        std::string format = DDB_IPC_DEFAULT_FORMAT;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(GetPlaylistContentsArgument, idx, format);
+COMMAND(get_playlist_contents, GetPlaylistContentsArgument)
+    int iter = PL_MAIN;
+    ddb_api->pl_lock();
+    ddb_playlist_t* plt = ddb_api->plt_get_for_idx(args.idx);
+    if (!plt) {
+        ddb_api->pl_unlock();
+        return error_response(id, "No playlist with given idx.");
+    }
+
+    const char* fmt = args.format.c_str();
+    char* code = ddb_api->tf_compile(fmt);
+    if (code == NULL) {
+        return error_response(id, "Compilation of title format failed.");
+    }
+
+    json resp = ok_response(id);
+    int count = ddb_api->plt_get_item_count(plt, iter);
+    std::vector<std::string> items {} ;
+    items.reserve(count);
+    char buf[4096];
+    memset(buf, '\0', sizeof(buf));
+
+    ddb_tf_context_t ctx;
+    ddb_playItem_t* prev;
+    ddb_playItem_t* cur  = ddb_api->plt_get_head_item (plt, iter);
+    while (cur != NULL) {
+        ctx = {
+            ._size = sizeof(ddb_tf_context_t),
+            .flags = 0,
+            .it = cur,
+            .plt = NULL,
+            .idx = 0,
+            .id = 0,
+            .iter = iter,
+        };
+        ddb_api->tf_eval(&ctx, code, buf, sizeof(buf));
+        items.push_back(buf);
+        prev = cur;
+        cur = ddb_api->pl_get_next(prev, iter);
+        ddb_api->pl_item_unref(prev);
+    }
+    ddb_api->tf_free(code);
+    ddb_api->plt_unref(plt);
+    ddb_api->pl_unlock();
+    resp["items"] = items;
+    return resp;
+}
+
 COMMAND(toggle_stop_after_current_track, Argument)
     int stop = ddb_api->conf_get_int("playlist.stop_after_current", 0);
     DDB_IPC_DEBUG << "Toggling stop after current track from " << stop << std::endl;
@@ -428,6 +482,7 @@ std::map<std::string, ipc_command> commands = {
     {"request-cover-art", command_request_cover_art},
     {"get-current-playlist", command_get_current_playlist},
     {"set-current-playlist", command_set_current_playlist},
+    {"get-playlist-contents", command_get_playlist_contents},
     // playback control
     {"toggle-stop-after-current-track", command_toggle_stop_after_current_track},
     {"toggle-stop-after-current-album", command_toggle_stop_after_current_album},

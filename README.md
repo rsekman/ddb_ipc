@@ -116,7 +116,7 @@ Additional range restrictions may apply.
     An error is returned if seeking beyond the end of the track.
 - `get-playpos` returns `data`, a dictionary with the keys `position` and `duration`, both floats giving the position in the current track and its duration, in seconds.
     Returns an error if not currently playing.
-- `get-now-playing format::string?="%artist% - %title%` formats the currently playing track according to the title format string `format`, returning it with the key `now-playing`
+- `get-now-playing format::string?="%artist% - %title%"` formats the currently playing track according to the title format string `format`, returning it with the key `now-playing`
     See upstream [DeaDBeeF](https://github.com/DeaDBeeF-Player/deadbeef/wiki/Title-formatting-2.0) and [foobar2000](https://wiki.hydrogenaud.io/index.php?title=Foobar2000:Title_Formatting_Reference) documentation for format string documentation.
     Returns an error if the format string is invalid.
     Returns an error if not currently playing.
@@ -124,6 +124,9 @@ Additional range restrictions may apply.
     Returns an error if there is no current playlist.
 - `set-current-playlist idx::int` sets the current playlist by index.
     Returns an error if unsuccessful, e.g. because `idx` is out of range.
+- `get-playlist-contents idx::int format::string?=%artist% - %title%"` Gets the contents of the playlist with index `idx` formatted according to `format`.
+    Returns an error if `idx` is out of range.
+    Returns an error if the format string is invalid.
 - `request-cover-art accept::[string]?=["filename"]` issues a request for the cover art for the currently playing track.
     Cover art look-up is asynchronous.
     An initial `OK` response to this command therefore only indicates a successful *request*.
