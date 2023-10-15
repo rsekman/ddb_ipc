@@ -1,0 +1,7 @@
+{"command": "get-current-playlist", "id": 1}
+{"command": "set-current-playlist", "id": 2, "args": {"idx": 2}}
+{"command": "get-current-playlist", "id": 3}
+{"command": "set-current-playlist", "id": 4, "args": {"idx": 14}}
+{"command": "get-current-playlist", "id": 5}
+{"command": "set-current-playlist", "id": 6, "args": {"idx": 0}}
+{"command": "get-current-playlist", "id": 7}

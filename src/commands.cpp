@@ -241,6 +241,38 @@ COMMAND(get_now_playing, GetNowPlayingArgument)
     return resp;
 }
 
+COMMAND(get_current_playlist, Argument)
+    ddb_playlist_t* plt = ddb_api->plt_get_curr();
+    if (!plt) {
+        return error_response(id, "No playlist set.");
+    }
+    char buf[4096];
+    ddb_api->plt_get_title(plt, buf, sizeof(buf));
+    std::string title(buf);
+    int idx = ddb_api->plt_get_curr_idx();
+
+    json resp = ok_response(id);
+    resp["title"] = title;
+    resp["idx"] = idx;
+    ddb_api->plt_unref(plt);
+    return resp;
+}
+
+class SetCurrPlaylistArgument : Argument {
+    public:
+      int idx;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SetCurrPlaylistArgument, idx);
+COMMAND(set_current_playlist, SetCurrPlaylistArgument)
+    ddb_api->plt_set_curr_idx(args.idx);
+    int curr_idx = ddb_api->plt_get_curr_idx();
+    if (curr_idx == args.idx) {
+        return ok_response(id);
+    } else {
+        return error_response(id, "Failed to set playlist");
+    }
+}
+
 COMMAND(toggle_stop_after_current_track, Argument)
     int stop = ddb_api->conf_get_int("playlist.stop_after_current", 0);
     DDB_IPC_DEBUG << "Toggling stop after current track from " << stop << std::endl;
@@ -377,6 +409,7 @@ COMMAND(request_cover_art, RequestCoverArtArgument)
 
 
 std::map<std::string, ipc_command> commands = {
+    // playback
     {"play", command_play},
     {"pause", command_pause},
     {"play-pause", command_play_pause},
@@ -389,11 +422,16 @@ std::map<std::string, ipc_command> commands = {
     {"adjust-volume", command_adjust_volume},
     {"toggle-mute", command_toggle_mute},
     {"seek", command_seek},
+    // info
     {"get-playpos", command_get_playpos},
     {"get-now-playing", command_get_now_playing},
+    {"request-cover-art", command_request_cover_art},
+    {"get-current-playlist", command_get_current_playlist},
+    {"set-current-playlist", command_set_current_playlist},
+    // playback control
     {"toggle-stop-after-current-track", command_toggle_stop_after_current_track},
     {"toggle-stop-after-current-album", command_toggle_stop_after_current_album},
-    {"request-cover-art", command_request_cover_art},
+    // properties
     {"get-property", command_get_property},
     {"set-property", command_set_property},
     {"observe-property", command_observe_property}
@@ -402,7 +440,7 @@ std::map<std::string, ipc_command> commands = {
 std::string prettify_json_exception(std::string prefix, json::exception &e) {
     std::string w = e.what();
     auto idx = w.find("] ");
-    if (idx != -1) {
+    if (idx == std::string::npos) {
         w = w.substr(idx+1);
     }
     return prefix + ": " + w;

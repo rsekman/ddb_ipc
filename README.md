@@ -94,7 +94,7 @@ Example valid commands are as follows:
 ```
 
 Available commands and their call signatures are listed below.
-Arguments are specified as `name::type`, followed by a `?` if the argument is optional, and `=default` if there is a default value..
+Arguments are specified as `name::type`, followed by a `?` if the argument is optional, and `=default` if there is a default value.
 Additional range restrictions may apply.
 
 - `play` start the player
@@ -120,8 +120,10 @@ Additional range restrictions may apply.
     See upstream [DeaDBeeF](https://github.com/DeaDBeeF-Player/deadbeef/wiki/Title-formatting-2.0) and [foobar2000](https://wiki.hydrogenaud.io/index.php?title=Foobar2000:Title_Formatting_Reference) documentation for format string documentation.
     Returns an error if the format string is invalid.
     Returns an error if not currently playing.
-- `toggle-stop-after-current-track` toggle the stop after current track flag
-- `toggle-stop-after-current-album` toggle the stop after current album flag
+- `get-current-playlist idx::int` gets the title and index of the current playlist
+    Returns an error if there is no current playlist.
+- `set-current-playlist idx::int` sets the current playlist by index.
+    Returns an error if unsuccessful, e.g. because `idx` is out of range.
 - `request-cover-art accept::[string]?=["filename"]` issues a request for the cover art for the currently playing track.
     Cover art look-up is asynchronous.
     An initial `OK` response to this command therefore only indicates a successful *request*.
@@ -130,6 +132,8 @@ Additional range restrictions may apply.
     If present, `accept` must contain at least one of `"filename"` and `"blob"`.
     If `accept` contains `"filename"`, the response will contain the key `filename` with an absolute path to the (cached) cover art.
     If `accept` contains `"blob`", the response will the contain the key `blob` with a base64-encoding of the cover art.
+- `toggle-stop-after-current-track` toggle the stop after current track flag
+- `toggle-stop-after-current-album` toggle the stop after current album flag
 - `get_property`, `set_property`, `observe_property` these commands are documented in the next section
 
 ### Properties
