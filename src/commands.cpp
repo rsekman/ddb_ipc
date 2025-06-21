@@ -170,9 +170,16 @@ class SeekArgument : Argument {
     std::optional<float> seconds = {};
 };
 void from_json(const json& j, SeekArgument& a) {
-    SeekArgument def;
-    a.percent = j.contains("percent") ? j.at("percent") : def.percent;
-    a.seconds = j.contains("seconds") ? j.at("seconds") : def.seconds;
+#if NLOHMANN_JSON_VERSION_MAJOR > 3 || \
+    (NLOHMANN_JSON_VERSION_MAJOR == 3 && NLOHMANN_JSON_VERSION_MINOR >= 12)
+    a.percent =
+        j.contains("percent") ? std::optional(j.at("percent")) : std::nullopt;
+    a.seconds =
+        j.contains("seconds") ? std::optional(j.at("seconds")) : std::nullopt;
+#else
+    a.percent = j.contains("percent") ? j.at("percent") : std::nullopt;
+    a.seconds = j.contains("seconds") ? j.at("seconds") : std::nullopt;
+#endif
     if ((bool)a.percent == (bool)a.seconds) {
         throw std::invalid_argument(
             "Exactly one of the percent and seconds arguments must be "
