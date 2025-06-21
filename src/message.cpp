@@ -2,7 +2,9 @@
 
 namespace ddb_ipc {
 
-std::string const prettify_json_exception(std::string prefix, json::exception &e) {
+std::string const prettify_json_exception(
+    std::string prefix, json::exception &e
+) {
     std::string w = e.what();
     auto idx = w.find("] ");
     if (idx == std::string::npos) {
@@ -13,8 +15,11 @@ std::string const prettify_json_exception(std::string prefix, json::exception &e
 
 void from_json(const json &j, Message &m) {
     std::string command;
-    if (!j.contains("command") || j["command"].type() != json::value_t::string) {
-        throw Exception("`command` field must be present and must be a string.");
+    if (!j.contains("command") || j["command"].type() != json::value_t::string)
+    {
+        throw Exception(
+            "`command` field must be present and must be a string."
+        );
     } else {
         command = j["command"];
     }
@@ -22,7 +27,7 @@ void from_json(const json &j, Message &m) {
     if (j.contains("request_id") && j["request_id"].is_number_integer()) {
         id = j["request_id"];
     }
-    json args = j.contains("args") ? j["args"] : json {} ;
+    json args = j.contains("args") ? j["args"] : json{};
     m = Message(id, command, args);
 }
 

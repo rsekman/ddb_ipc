@@ -16,7 +16,6 @@ void to_json(json& j, const ResponseStatus& c) {
     }
 }
 
-
 void to_json(json& j, const Response& r) {
     j = r.data;
     if (r.id) {
@@ -38,4 +37,4 @@ Response error_response(request_id id, std::string mess) {
     return Response(id, DDB_IPC_RESPONSE_ERR, {{"message", mess}});
 }
 
-}
+}  // namespace ddb_ipc

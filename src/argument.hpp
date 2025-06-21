@@ -10,6 +10,6 @@ namespace ddb_ipc {
 class Argument {};
 void from_json(const json &j, Argument &a);
 
-}
+}  // namespace ddb_ipc
 
 #endif

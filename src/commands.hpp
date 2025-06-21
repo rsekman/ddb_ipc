@@ -10,12 +10,12 @@ using json = nlohmann::json;
 
 typedef std::optional<int> request_id;
 
-#define COMMAND(n, argt)                  \
+#define COMMAND(n, argt)                         \
     json command_##n(request_id id, argt& args); \
     json command_##n(request_id id, json args) { \
-        argt a = args;                    \
-        return command_##n(id, a);        \
-    }                                     \
+        argt a = args;                           \
+        return command_##n(id, a);               \
+    }                                            \
     json command_##n(request_id id, argt& args) {
 namespace ddb_ipc {
 
