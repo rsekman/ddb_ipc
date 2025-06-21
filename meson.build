@@ -7,7 +7,7 @@ destdir = get_option('libdir') / 'deadbeef'
 
 add_global_arguments('-DLIBDIR="'  + get_option('libdir') + '"', language : 'cpp')
 
-incdir = include_directories('src', 'submodules/cpp-base64')
+incdir = include_directories('include', 'submodules/cpp-base64')
 
 base64_lib = static_library('libbase64',
   'submodules/cpp-base64/base64.cpp',
