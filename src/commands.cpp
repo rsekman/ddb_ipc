@@ -466,7 +466,6 @@ DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
 if (!cur) {
     return error_response(id, "Not playing");
 }
-ddb_api->pl_item_ref(cur);
 int64_t sid = dist(mersenne_twister);
 DDB_IPC_DEBUG << "Received cover art request, dispatching with sid=" << sid
               << std::endl;
