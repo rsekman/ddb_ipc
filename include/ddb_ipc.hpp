@@ -27,28 +27,6 @@
     "You should have received a copy of the GNU General Public License\n"    \
     "along with this program.  If not, see <http://www.gnu.org/licenses/>.\n"
 
-#define DDB_IPC_LOG_NONE 0
-#define DDB_IPC_LOG_ERR 1
-#define DDB_IPC_LOG_WARN 2
-#define DDB_IPC_LOG_DEBUG 3
-
-#ifndef DDB_IPC_LOGLEVEL
-#define DDB_IPC_LOGLEVEL DDB_IPC_LOG_DEBUG
-#endif
-
-#define DDB_IPC_ERR                           \
-    if (DDB_IPC_LOGLEVEL < DDB_IPC_LOG_ERR) { \
-    } else                                    \
-        std::cerr << "[ddb_ipc] [error] "
-#define DDB_IPC_WARN                           \
-    if (DDB_IPC_LOGLEVEL < DDB_IPC_LOG_WARN) { \
-    } else                                     \
-        std::cerr << "[ddb_ipc] [warn] "
-#define DDB_IPC_DEBUG                           \
-    if (DDB_IPC_LOGLEVEL < DDB_IPC_LOG_DEBUG) { \
-    } else                                      \
-        std::cerr << "[ddb_ipc] [debug] "
-
 #define DDB_IPC_DEFAULT_FORMAT "%artist% - %title%"
 
 // clang-format off
@@ -57,6 +35,7 @@
 // clang-format on
 #include <linux/limits.h>
 #include <pthread.h>
+#include <spdlog/logger.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
@@ -70,6 +49,8 @@ extern DB_functions_t* ddb_api;
 extern ddb_artwork_plugin_t* ddb_artwork;
 
 void send_response(json msg, int socket);
+
+std::shared_ptr<spdlog::logger> get_logger();
 
 }  // namespace ddb_ipc
 #endif
