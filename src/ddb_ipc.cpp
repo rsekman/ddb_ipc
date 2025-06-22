@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include <iostream>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <set>
 #include <stdexcept>
@@ -36,6 +37,7 @@ int ipc_listening = 0;
 int ddb_socket = -1;
 pthread_t ipc_thread;
 char socket_path[PATH_MAX];
+std::recursive_mutex sock_mutex;
 
 typedef struct pollfd pollfd_t;
 
@@ -84,44 +86,66 @@ void send_response(json response, int socket) {
     std::string response_str = response.dump() + std::string("\n");
     int resp_len = response_str.length();
     const char* bytes = response_str.c_str();
-    int max_packet_len = DDB_IPC_MAX_MESSAGE_LENGTH;
+    int max_packet_len = DDB_IPC_MAX_PACKET_LENGTH;
     int packet_len;
-    struct timeval start_time, cur_time;
+    struct timeval start_time, pkt_time, cur_time;
     int timeout_ms = DDB_IPC_WRITE_TIMEOUT;
     int waited_ms;
     pollfd_t pfd = {.fd = socket, .events = POLLOUT, .revents = 0};
     gettimeofday(&start_time, NULL);
-    for (int i = 0; i < resp_len; i += max_packet_len) {
-        packet_len = i + 4096 > resp_len ? resp_len - i : max_packet_len;
+    size_t i = 0;
+
+    std::lock_guard lock(sock_mutex);
+    while (i < resp_len) {
+        // for (int i = 0; i < resp_len; i += max_packet_len) {
         // wait for the socket to become available for writing
-        do {
-            poll(&pfd, 1, timeout_ms);
-            gettimeofday(&cur_time, NULL);
-            waited_ms = (cur_time.tv_sec - start_time.tv_sec) * 1000 +
-                        (cur_time.tv_usec - start_time.tv_usec) / 1000;
-            if (waited_ms >= timeout_ms) {
-                DDB_IPC_ERR << "Error sending response on descriptor " << socket
-                            << ": timed out after " << timeout_ms << "ms"
-                            << std::endl;
-            }
-            if (pfd.revents & POLLOUT) {
-                break;
-            }
-        } while (1);
-        if (send(socket, bytes + i, packet_len, MSG_NOSIGNAL) <= 0) {
-            DDB_IPC_ERR << "Error sending response on descriptor " << socket
-                        << ": errno " << errno << std::endl;
+        gettimeofday(&pkt_time, NULL);
+        int ret = poll(&pfd, 1, timeout_ms);
+        if (ret == 0) {
+            DDB_IPC_ERR << "Error sending response (request id: "
+                        << response["request_id"] << ") on descriptor "
+                        << socket << ": timed out after " << timeout_ms << "ms"
+                        << std::endl;
             close_connection(socket);
             return;
         }
+        if (ret < 0) {
+            DDB_IPC_ERR << "Error sending response (request id: "
+                        << response["request_id"] << ") on descriptor "
+                        << socket << ": errno " << errno << std::endl;
+            close_connection(socket);
+            return;
+        }
+        while (i < resp_len) {
+            packet_len =
+                i + max_packet_len > resp_len ? resp_len - i : max_packet_len;
+            ssize_t sent = send(socket, bytes + i, packet_len, MSG_NOSIGNAL);
+            if (sent < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    break;
+                }
+                DDB_IPC_ERR << "Error sending response (request id: "
+                            << response["request_id"] << ") on descriptor "
+                            << socket << ": errno " << errno << std::endl;
+                close_connection(socket);
+                return;
+            } else {
+                i += sent;
+            }
+        }
     }
+    gettimeofday(&cur_time, NULL);
+    waited_ms = (cur_time.tv_sec - start_time.tv_sec) * 1000 +
+                (cur_time.tv_usec - start_time.tv_usec) / 1000;
     if (resp_len > 1024 + 20) {
         DDB_IPC_DEBUG << "Responded: " << response_str.substr(0, 512)
                       << " [..., " << resp_len - 1024 << " characters omitted] "
                       << response_str.substr(resp_len - 512, 512) << "in "
                       << waited_ms << " ms." << std::endl;
     } else {
-        DDB_IPC_DEBUG << "Responded: " << response << std::endl;
+        DDB_IPC_DEBUG << "Responded: " << response << "in " << waited_ms
+                      << " ms." << std::endl;
+        ;
     }
 }
 
@@ -130,6 +154,7 @@ void send_response(json response, int socket) {
 void broadcast(json message) {
     std::string message_str = message.dump() + std::string("\n");
     DDB_IPC_DEBUG << "Broadcasting: " << message_str;
+    std::lock_guard lock(sock_mutex);
     for (int i = 1; i <= DDB_IPC_MAX_CONNECTIONS; i++) {
         if (fds[i].fd > -1) {
             send(
@@ -172,13 +197,14 @@ int read_messages(int fd) {
     // return value: 0 if no errors occured and the connection should be kept
     // open -1 otherwise
     int should_close_conn = 0;
-    char buf[DDB_IPC_MAX_MESSAGE_LENGTH];
+    char buf[DDB_IPC_MAX_PACKET_LENGTH];
     int rc;
     json message;
+    std::lock_guard lock(sock_mutex);
     do {
         // zero out the buffer
-        memset(buf, '\0', DDB_IPC_MAX_MESSAGE_LENGTH);
-        rc = recv(fd, buf, DDB_IPC_MAX_MESSAGE_LENGTH, 0);
+        memset(buf, '\0', DDB_IPC_MAX_PACKET_LENGTH);
+        rc = recv(fd, buf, DDB_IPC_MAX_PACKET_LENGTH, 0);
         if (rc < 0) {
             if (errno != EWOULDBLOCK) {
                 should_close_conn = -1;
