@@ -51,15 +51,16 @@
 
 #define DDB_IPC_DEFAULT_FORMAT "%artist% - %title%"
 
-#include <deadbeef/artwork.h>
+// clang-format off
 #include <deadbeef/deadbeef.h>
+#include <deadbeef/artwork.h>
+// clang-format on
 #include <linux/limits.h>
 #include <pthread.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
 #include <nlohmann/json.hpp>
-#include <string>
 
 using json = nlohmann::json;
 
