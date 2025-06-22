@@ -133,16 +133,16 @@ class GetPropertyArgument : Argument {
     std::string property;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GetPropertyArgument, property);
-COMMAND(get_property, GetPropertyArgument)
-std::string prop = args.property;
-json resp = ok_response(id);
-resp["property"] = args.property;
-if (getters.count(prop)) {
-    resp["value"] = getters[prop]();
-} else {
-    resp["value"] = property_as_json(prop);
-}
-return (resp);
+COMMAND(get_property, GetPropertyArgument) {
+    std::string prop = args.property;
+    json resp = ok_response(id);
+    resp["property"] = args.property;
+    if (getters.count(prop)) {
+        resp["value"] = getters[prop]();
+    } else {
+        resp["value"] = property_as_json(prop);
+    }
+    return (resp);
 }
 
 std::map<std::string, ipc_property_setter> setters = {
@@ -155,30 +155,30 @@ class SetPropertyArgument : public GetPropertyArgument {
     json value;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SetPropertyArgument, property, value)
-COMMAND(set_property, SetPropertyArgument)
-std::string prop = args.property;
-if (setters.count(prop)) {
-    try {
-        setters[prop](args.value);
-    } catch (std::exception& e) {
-        return error_response(id, e.what());
+COMMAND(set_property, SetPropertyArgument) {
+    std::string prop = args.property;
+    if (setters.count(prop)) {
+        try {
+            setters[prop](args.value);
+        } catch (std::exception& e) {
+            return error_response(id, e.what());
+        }
+        return ok_response(id);
+    }
+    const char* propc = prop.c_str();
+    if (args.value.is_number_integer()) {
+        ddb_api->conf_set_int(propc, args.value);
+    } else if (args.value.is_number_float()) {
+        ddb_api->conf_set_float(propc, args.value);
+    } else if (args.value.is_string()) {
+        std::string val = args.value;
+        ddb_api->conf_set_str(propc, val.c_str());
+    } else {
+        return bad_request_response(
+            id, std::string("Argument property must be a string or number")
+        );
     }
     return ok_response(id);
-}
-const char* propc = prop.c_str();
-if (args.value.is_number_integer()) {
-    ddb_api->conf_set_int(propc, args.value);
-} else if (args.value.is_number_float()) {
-    ddb_api->conf_set_float(propc, args.value);
-} else if (args.value.is_string()) {
-    std::string val = args.value;
-    ddb_api->conf_set_str(propc, val.c_str());
-} else {
-    return bad_request_response(
-        id, std::string("Argument property must be a string or number")
-    );
-}
-return ok_response(id);
 }
 
 class ObservePropertyArgument : public GetPropertyArgument {
@@ -186,12 +186,12 @@ class ObservePropertyArgument : public GetPropertyArgument {
     int socket;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ObservePropertyArgument, property, socket)
-COMMAND(observe_property, ObservePropertyArgument)
-int s = (int)args.socket;
-if (!observers.count(s)) {
-    observers[s] = std::set<std::string>({});
+COMMAND(observe_property, ObservePropertyArgument) {
+    int s = (int)args.socket;
+    if (!observers.count(s)) {
+        observers[s] = std::set<std::string>({});
+    }
+    observers[s].insert((std::string)args.property);
+    return ok_response(id);
 }
-observers[s].insert((std::string)args.property);
-return ok_response(id);
-}
-}
+}  // namespace ddb_ipc
