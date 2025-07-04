@@ -158,14 +158,21 @@ void send_response(json response, int socket) {
     response_str.erase(response_str.end() - 1);
     if (resp_len > elision_len + 20) {
         logger->debug(
-            "Responded: {} [..., {} characters omitted] {} in {} ms.",
+            "Responded (request id: {}): {} [..., {} characters omitted] {} in "
+            "{} ms.",
+            req_id,
             response_str.substr(0, elision_len / 2),
             resp_len - elision_len,
             response_str.substr(resp_len - elision_len / 2, elision_len / 2),
             waited_ms
         );
     } else {
-        logger->debug("Responded: {} in {} ms.", response_str, waited_ms);
+        logger->debug(
+            "Responded (request id: {}): {} in {} ms.",
+            req_id,
+            response_str,
+            waited_ms
+        );
     }
 }
 
