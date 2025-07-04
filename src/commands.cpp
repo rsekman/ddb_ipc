@@ -6,13 +6,11 @@
 // clang-format on
 #include <limits.h>
 
-#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <random>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -140,7 +138,8 @@ COMMAND(adjust_volume, AdjustVolumeArgument) {
 }
 
 COMMAND(toggle_mute, Argument) {
-    DDB_IPC_DEBUG << "Toggling mute." << std::endl;
+    auto logger = get_logger();
+    logger->debug("Toggling mute.");
     int m = ddb_api->audio_is_mute();
     if (m) {
         ddb_api->audio_set_mute(0);
@@ -352,9 +351,9 @@ COMMAND(get_playlist_contents, GetPlaylistContentsArgument) {
 }
 
 COMMAND(toggle_stop_after_current_track, Argument) {
+    auto logger = get_logger();
     int stop = ddb_api->conf_get_int("playlist.stop_after_current", 0);
-    DDB_IPC_DEBUG << "Toggling stop after current track from " << stop
-                  << std::endl;
+    logger->debug("Toggling stop after current track from {}", stop);
     if (stop) {
         ddb_api->conf_set_int("playlist.stop_after_current", 0);
     } else {
@@ -365,7 +364,8 @@ COMMAND(toggle_stop_after_current_track, Argument) {
 }
 
 COMMAND(toggle_stop_after_current_album, Argument) {
-    DDB_IPC_DEBUG << "Toggling stop after current album." << std::endl;
+    auto logger = get_logger();
+    logger->debug("Toggling stop after current album.");
     int stop = ddb_api->conf_get_int("playlist.stop_after_album", 0);
     if (stop) {
         ddb_api->conf_set_int("playlist.stop_after_album", 0);
@@ -395,10 +395,10 @@ typedef struct {
 void callback_cover_art_found(
     int error, ddb_cover_query_t* query, ddb_cover_info_t* cover
 ) {
+    auto logger = get_logger();
     response_addr_t* addr = (response_addr_t*)(query->user_data);
     json resp;
-    DDB_IPC_DEBUG << "Entered cover art callback for descriptor "
-                  << addr->socket << std::endl;
+    logger->debug("Entered cover art callback for descriptor {}", addr->socket);
     if ((query->flags & DDB_ARTWORK_FLAG_CANCELLED) || cover == NULL ||
         cover->image_filename == NULL)
     {
@@ -406,11 +406,11 @@ void callback_cover_art_found(
     } else {
         resp = ok_response(addr->id);
         if (addr->accept->count("filename") > 0) {
-            DDB_IPC_DEBUG << "Responding with filename." << std::endl;
+            logger->debug("Responding with filename.");
             resp["filename"] = cover->image_filename;
         }
         if (addr->accept->count("blob") > 0) {
-            DDB_IPC_DEBUG << "Responding with blob." << std::endl;
+            logger->debug("Responding with blob.");
             std::ifstream cover_file(
                 cover->image_filename, std::ios::binary | std::ios::ate
             );
@@ -463,13 +463,13 @@ void from_json(const json& j, RequestCoverArtArgument& a) {
     }
 }
 COMMAND(request_cover_art, RequestCoverArtArgument) {
+    auto logger = get_logger();
     DB_playItem_t* cur = ddb_api->streamer_get_playing_track();
     if (!cur) {
         return error_response(id, "Not playing");
     }
     int64_t sid = dist(mersenne_twister);
-    DDB_IPC_DEBUG << "Received cover art request, dispatching with sid=" << sid
-                  << std::endl;
+    logger->debug("Received cover art request, dispatching with sid={}.", sid);
     ddb_cover_query_t* cover_query =
         (ddb_cover_query_t*)calloc(sizeof(ddb_cover_query_t), 1);
     cover_query->flags = 0;
@@ -484,7 +484,7 @@ COMMAND(request_cover_art, RequestCoverArtArgument) {
     };
     *(response_addr_t*)cover_query->user_data = addr;
     ddb_artwork->cover_get(cover_query, callback_cover_art_found);
-    DDB_IPC_DEBUG << "Sent cover art query" << std::endl;
+    logger->debug("Sent cover art query");
     return ok_response(id);
 }
 

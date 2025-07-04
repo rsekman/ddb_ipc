@@ -1,16 +1,16 @@
 #include <errno.h>
 #include <pthread.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/spdlog.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
 #include <unistd.h>
 
-#include <iostream>
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <set>
-#include <stdexcept>
 #include <string>
 using json = nlohmann::json;
 
@@ -43,14 +43,20 @@ typedef struct pollfd pollfd_t;
 
 pollfd_t fds[DDB_IPC_MAX_CONNECTIONS + 1];
 
+std::shared_ptr<spdlog::logger> get_logger() {
+    return spdlog::get(DDB_IPC_PROJECT_ID);
+}
+
 int open_socket(char* socket_path) {
     struct sockaddr_un name;
     size_t size;
     int sock;
     sock = socket(PF_LOCAL, SOCK_STREAM | SOCK_NONBLOCK, 0);
+
+    auto logger = get_logger();
     if (sock < 0) {
         // TODO: Better error handling here
-        DDB_IPC_ERR << "Error creating socket: " << errno << std::endl;
+        logger->error("Error creating socket: {}", errno);
         return -1;
     }
     name.sun_family = PF_LOCAL;
@@ -60,7 +66,7 @@ int open_socket(char* socket_path) {
     ::unlink(socket_path);
     if (bind(sock, (struct sockaddr*)&name, size) < 0) {
         // TODO: Better error handling here
-        DDB_IPC_ERR << "Error binding socket: " << errno << std::endl;
+        logger->error("Error binding socket: {}", errno);
         return -1;
     }
     return sock;
@@ -69,9 +75,8 @@ int open_socket(char* socket_path) {
 // Send a message to one client
 
 void close_connection(int socket) {
-    DDB_IPC_DEBUG << "Closed connection with descriptor " << socket
-                  << std::endl;
-    ;
+    auto logger = get_logger();
+    logger->debug("Closed connection with descriptor {}.", socket);
     ::close(socket);
     for (int i = 0; i <= DDB_IPC_MAX_CONNECTIONS; i++) {
         if (fds[i].fd == socket) {
@@ -95,24 +100,32 @@ void send_response(json response, int socket) {
     gettimeofday(&start_time, NULL);
     size_t i = 0;
 
+    auto logger = get_logger();
     std::lock_guard lock(sock_mutex);
+    int req_id = response["request_id"];
     while (i < resp_len) {
         // for (int i = 0; i < resp_len; i += max_packet_len) {
         // wait for the socket to become available for writing
         gettimeofday(&pkt_time, NULL);
         int ret = poll(&pfd, 1, timeout_ms);
         if (ret == 0) {
-            DDB_IPC_ERR << "Error sending response (request id: "
-                        << response["request_id"] << ") on descriptor "
-                        << socket << ": timed out after " << timeout_ms << "ms"
-                        << std::endl;
+            logger->error(
+                "Error sending response (request id: {}) on descriptor {}: "
+                "timed out after {} ms.",
+                req_id,
+                socket,
+                timeout_ms
+            );
             close_connection(socket);
             return;
         }
         if (ret < 0) {
-            DDB_IPC_ERR << "Error sending response (request id: "
-                        << response["request_id"] << ") on descriptor "
-                        << socket << ": errno " << errno << std::endl;
+            logger->error(
+                "Error sending response (request id: {}) on descriptor {}: {}",
+                req_id,
+                socket,
+                errno
+            );
             close_connection(socket);
             return;
         }
@@ -124,9 +137,13 @@ void send_response(json response, int socket) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     break;
                 }
-                DDB_IPC_ERR << "Error sending response (request id: "
-                            << response["request_id"] << ") on descriptor "
-                            << socket << ": errno " << errno << std::endl;
+                logger->error(
+                    "Error sending response (request id: {}) on descriptor {}: "
+                    "{}.",
+                    req_id,
+                    socket,
+                    errno
+                );
                 close_connection(socket);
                 return;
             } else {
@@ -137,23 +154,28 @@ void send_response(json response, int socket) {
     gettimeofday(&cur_time, NULL);
     waited_ms = (cur_time.tv_sec - start_time.tv_sec) * 1000 +
                 (cur_time.tv_usec - start_time.tv_usec) / 1000;
-    if (resp_len > 1024 + 20) {
-        DDB_IPC_DEBUG << "Responded: " << response_str.substr(0, 512)
-                      << " [..., " << resp_len - 1024 << " characters omitted] "
-                      << response_str.substr(resp_len - 512, 512) << "in "
-                      << waited_ms << " ms." << std::endl;
+    size_t elision_len = 1024;
+    response_str.erase(response_str.end() - 1);
+    if (resp_len > elision_len + 20) {
+        logger->debug(
+            "Responded: {} [..., {} characters omitted] {} in {} ms.",
+            response_str.substr(0, elision_len / 2),
+            resp_len - elision_len,
+            response_str.substr(resp_len - elision_len / 2, elision_len / 2),
+            waited_ms
+        );
     } else {
-        DDB_IPC_DEBUG << "Responded: " << response << "in " << waited_ms
-                      << " ms." << std::endl;
-        ;
+        logger->debug("Responded: {} in {} ms.", response_str, waited_ms);
     }
 }
 
 // Send a message to all connected clients
 
 void broadcast(json message) {
-    std::string message_str = message.dump() + std::string("\n");
-    DDB_IPC_DEBUG << "Broadcasting: " << message_str;
+    auto logger = get_logger();
+    std::string message_str = message.dump();
+    logger->debug("Broadcasting: {}.", message_str);
+    message_str += "\n";
     std::lock_guard lock(sock_mutex);
     for (int i = 1; i <= DDB_IPC_MAX_CONNECTIONS; i++) {
         if (fds[i].fd > -1) {
@@ -171,6 +193,7 @@ void handle_message(Message m, int socket) {
 }
 
 void handle_message(json message, int socket) {
+    auto logger = get_logger();
     if (!message.contains("args")) {
         message["args"] = {};
     }
@@ -187,9 +210,11 @@ void handle_message(json message, int socket) {
         m.args["socket"] = socket;
         handle_message(m, socket);
     } catch (Exception& e) {
-        DDB_IPC_DEBUG << e.what() << std::endl;
+        logger->debug("Invalid message {}: {}.", message.dump(), e.what());
     } catch (std::exception& e) {
-        DDB_IPC_DEBUG << e.what() << std::endl;
+        logger->debug(
+            "Error handling message {}: {}.", message.dump(), e.what()
+        );
     }
 }
 
@@ -201,6 +226,8 @@ int read_messages(int fd) {
     int rc;
     json message;
     std::lock_guard lock(sock_mutex);
+
+    auto logger = get_logger();
     do {
         // zero out the buffer
         memset(buf, '\0', DDB_IPC_MAX_PACKET_LENGTH);
@@ -214,15 +241,14 @@ int read_messages(int fd) {
             should_close_conn = -1;
             break;
         }
-        DDB_IPC_DEBUG << "Received message on descriptor " << fd << ": " << buf;
+        logger->debug("Received message on descriptor {}: {}.", fd, buf);
         std::istringstream msg(buf);
         std::string l;
         while (std::getline(msg, l)) {
             try {
                 message = json::parse(l);
             } catch (const json::exception& e) {
-                DDB_IPC_WARN << "Message is not valid JSON: " << e.what()
-                             << std::endl;
+                logger->warn("Message is not valid JSON: {}.", e.what());
                 send_response(
                     json{
                         {"status", DDB_IPC_RESPONSE_ERR},
@@ -241,11 +267,13 @@ int read_messages(int fd) {
 
 int accept_connection(int new_conn, pollfd_t* fds, int n_fds) {
     // try to find an open slot, return 0 if success, -1 otherwise
+    auto logger = get_logger();
     for (int i = 1; i <= n_fds; i++) {
         if (fds[i].fd < 0) {
             fds[i].fd = new_conn;
-            DDB_IPC_DEBUG << "Accepted new connection with descriptor "
-                          << new_conn << std::endl;
+            logger->debug(
+                "Accepted new connection with descriptor {}.", new_conn
+            );
             return 0;
         }
     }
@@ -267,10 +295,11 @@ void* listen(void* sockname) {
     rc = ::listen(ddb_socket, 1);
     fds[0].fd = ddb_socket;
 
+    auto logger = get_logger();
     while (ipc_listening) {
         rc = poll(fds, DDB_IPC_MAX_CONNECTIONS + 1, DDB_IPC_POLL_FREQ);
         if (rc < 0) {
-            DDB_IPC_ERR << "Error reading from socket:" << errno << std::endl;
+            logger->error("Error reading from socket: {}.", errno);
         }
         if (rc == 0) {
             // timed out
@@ -292,7 +321,7 @@ void* listen(void* sockname) {
                 }
             }
             if (errno != EWOULDBLOCK) {
-                DDB_IPC_DEBUG << "accept() failed";
+                logger->warn("accept() failed");
             }
         }
         for (i = 1; i <= DDB_IPC_MAX_CONNECTIONS; i++) {
@@ -315,10 +344,11 @@ void* listen(void* sockname) {
 int start() { return 0; }
 
 int stop() {
-    DDB_IPC_DEBUG << "Stopping polling thread..." << std::endl;
+    auto logger = get_logger();
+    logger->debug("Stopping polling thread...");
     ipc_listening = 0;
     pthread_join(ipc_thread, NULL);
-    DDB_IPC_DEBUG << "Closing socket...." << std::endl;
+    logger->debug("Closing socket....");
     ::close(ddb_socket);
     ::unlink(socket_path);
     return 0;
@@ -369,11 +399,12 @@ void on_volume_change() {
 }
 
 void on_config_changed() {
-    DDB_IPC_DEBUG << "Config changed..." << std::endl;
+    auto logger = get_logger();
+    logger->debug("Config changed...");
     broadcast(json{{"event", "config-changed"}});
     json resp;
     for (auto obs = observers.begin(); obs != observers.end(); obs++) {
-        DDB_IPC_DEBUG << "Observer #" << obs->first << std::endl;
+        logger->debug("Handling observer #{}.", obs->first);
         auto propset = obs->second;
         for (auto prop = propset.begin(); prop != propset.end(); prop++) {
             resp = json{{"event", "property-change"}, {"property", *prop}};
@@ -382,8 +413,9 @@ void on_config_changed() {
             } else {
                 resp["value"] = property_as_json(*prop);
             }
-            DDB_IPC_DEBUG << "Property " << *prop << "; value " << resp["value"]
-                          << std::endl;
+            logger->debug(
+                "Property {}; value {}.", *prop, resp["value"].dump()
+            );
             send_response(resp, obs->first);
         }
     }
@@ -438,6 +470,10 @@ void init(DB_functions_t* api) {
     p.disconnect = disconnect;
     p.message = handleMessage;
     p.configdialog = configDialog_;
+
+    auto logger = spdlog::stderr_color_mt(DDB_IPC_PROJECT_ID);
+    logger->set_level(spdlog::level::debug);
+    logger->set_pattern("[%n] [%^%l%$] [thread %t] %v");
 }
 
 DB_plugin_t* load(DB_functions_t* api) {
@@ -450,7 +486,8 @@ DB_plugin_t* load(DB_functions_t* api) {
         socket_path,
         PATH_MAX
     );
-    DDB_IPC_DEBUG << "Opening socket at " << socket_path << std::endl;
+    auto logger = get_logger();
+    logger->debug("Opening socket at {}.", socket_path);
     ipc_listening = 1;
     pthread_create(&ipc_thread, NULL, listen, (void*)socket_path);
     return &definition_;
