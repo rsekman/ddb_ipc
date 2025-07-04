@@ -19,6 +19,7 @@ using json = nlohmann::json;
 #include "argument.hpp"
 #include "commands.hpp"
 #include "ddb_ipc.hpp"
+#include "fmt_optional.hpp"
 #include "message.hpp"
 #include "properties.hpp"
 #include "response.hpp"
@@ -102,7 +103,13 @@ void send_response(json response, int socket) {
 
     auto logger = get_logger();
     std::lock_guard lock(sock_mutex);
-    int req_id = response["request_id"];
+
+    request_id req_id{};
+    if (response.contains("request_id") &&
+        response["request_id"].is_number_integer())
+    {
+        req_id = response["request_id"];
+    }
     while (i < resp_len) {
         // for (int i = 0; i < resp_len; i += max_packet_len) {
         // wait for the socket to become available for writing
